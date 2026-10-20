@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../ClothProject.cs" Link="ClothProject.cs"/>
+    <Compile Include="../../TattooExporter.cs" Link="TattooExporter.cs"/>
+    <Compile Include="../../PngTextureReader.cs" Link="PngTextureReader.cs"/>
+    <Compile Include="../../AddonExporter.cs" Link="AddonExporter.cs"/>
+    <Compile Include="../../CreatureMetadata.cs" Link="CreatureMetadata.cs"/>
+    <Compile Include="../../HairVariations.cs" Link="HairVariations.cs"/>
+    <Compile Include="../../FirstPersonMetadata.cs" Link="FirstPersonMetadata.cs"/>
+    <Compile Include="../../FiveMResourceValidator.cs" Link="FiveMResourceValidator.cs"/>
+    <Compile Include="../../YldInspector.cs" Link="YldInspector.cs"/>
+    <Compile Include="../../TextureContent.cs" Link="TextureContent.cs"/>
+    <Reference Include="CodeWalker.Core"><HintPath>$(CodeWalkerDir)\CodeWalker.Core.dll</HintPath></Reference>
+    <Reference Include="SharpDX"><HintPath>$(CodeWalkerDir)\SharpDX.dll</HintPath></Reference>
+    <Reference Include="SharpDX.Mathematics"><HintPath>$(CodeWalkerDir)\SharpDX.Mathematics.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

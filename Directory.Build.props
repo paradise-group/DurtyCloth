@@ -1,0 +1,6 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+  <PropertyGroup>
+    <CodeWalkerDir Condition="'$(CodeWalkerDir)' == ''">$(MSBuildThisFileDirectory)deps/CodeWalker</CodeWalkerDir>
+  </PropertyGroup>
+</Project>

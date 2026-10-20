@@ -1,0 +1,4 @@
+using System.IO;
+using FooxClothStudio;
+foreach(var gender in new[] { "Masculino", "Feminino" }) foreach(var asset in GamePedAssets.Load(args[0], gender)) { var data = ModelPreview.Read(asset.ModelPath, false); var p = data.Parts.SelectMany(p => p.Positions).ToArray(); Console.WriteLine($"{gender} {asset.Slot}: {p.Min(v => v.Y):F2}..{p.Max(v => v.Y):F2} texture={asset.TexturePath}"); }
+if(args.Length > 1) { var project = DctProjectImporter.Import(args[1]); var top = project.Items.FirstOrDefault(i => i.Gender == "Feminino" && i.Category.EndsWith("[jbib]") && i.SourceIndex == 119) ?? project.Items.First(i => i.Gender == "Feminino" && i.Category.EndsWith("[jbib]")); project.Items = [top]; Directory.CreateDirectory("validation/full-ped-female-fixture"); File.WriteAllText("validation/full-ped-female-fixture/project.fcsproj", System.Text.Json.JsonSerializer.Serialize(project)); Console.WriteLine(top.ModelPath); }
