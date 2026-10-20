@@ -433,6 +433,12 @@ public partial class MainWindow : Window
         CountText.Text = filtered.Length + " / " + _project.Items.Count + " drawables • " + _project.Tattoos.Count + " tattoos";
         ProjectText.Text = _project.Name + (_dirty ? " *" : "") +
             (_projectPath is null ? "  •  projeto não salvo" : "  •  " + _projectPath);
+        if (_duplicateReviewNeeded || DuplicateReview.IsExpanded)
+        {
+            var expand = _duplicateReviewNeeded; _duplicateReviewNeeded = false;
+            if (expand && !DuplicateReview.IsExpanded) DuplicateReview.IsExpanded = true;
+            else _ = RefreshDuplicateReviewAsync();
+        }
     }
 
     private bool ConfirmDiscard()
@@ -1836,6 +1842,7 @@ public partial class MainWindow : Window
             var fingerprint = TextureContent.Fingerprint(path);
             if (content.TryGetValue(fingerprint, out var match))
             {
+                _duplicateReviewNeeded = true;
                 var import = duplicatePolicy;
                 if (import is null)
                 {

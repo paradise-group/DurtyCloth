@@ -178,3 +178,5 @@ O repositório se chama DurtyCloth; o aplicativo continua com o nome Paradise Cl
 É uma implementação independente, sem código do Durty Cloth Tool.
 Consulte [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) para processo e testes,
 e [COMPATIBILITY.md](COMPATIBILITY.md) para o histórico técnico e os limites.
+
+- Revisão de duplicadas no rodapé: prévias da existente e da nova, slots/arquivos e remoção individual do projeto, preservando originais.

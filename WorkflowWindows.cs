@@ -307,7 +307,7 @@ public sealed class DuplicateTextureWindow : Window
         WorkflowUi.Theme(this, "Add duplicate texture?", 570, 180); MinHeight = 180;
         var panel = WorkflowUi.Stack(); Content = panel;
         panel.Children.Add(new TextBlock { Text = (slot.HasValue ? $"Essa textura já existe no slot {(char)('A' + slot.Value)} (posição {slot.Value}).\n" : "Looks like a texture with the same content already exists.\n") +
-            matchingName + "\n\nDo you still want to add this texture?", TextWrapping = TextWrapping.Wrap });
+            matchingName + "\n\nDo you still want to add this texture?\nImporte para comparar antiga e nova no rodapé do aplicativo.", TextWrapping = TextWrapping.Wrap });
         var buttons = new WrapPanel(); panel.Children.Add(buttons);
         foreach (var choice in new[] { ("Import duplicate", true, false), ("Don't import", false, false),
             ("Import all", true, true), ("Don't import any duplicate", false, true) })
