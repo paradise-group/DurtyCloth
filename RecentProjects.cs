@@ -14,14 +14,14 @@ public sealed class RecentProjects
         {
             return (JsonSerializer.Deserialize<string[]>(File.ReadAllText(_file)) ?? [])
                 .Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath)
-                .Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
+                .Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToArray();
         }
         catch (Exception) { return []; }
     }
     public void Remember(string path)
     {
         path = Path.GetFullPath(path);
-        var paths = new[] { path }.Concat(Read()).Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
+        var paths = new[] { path }.Concat(Read()).Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToArray();
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_file))!);
         var temporary = _file + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(paths));

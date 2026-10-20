@@ -181,4 +181,4 @@ e [COMPATIBILITY.md](COMPATIBILITY.md) para o histórico técnico e os limites.
 
 - Revisão de duplicadas no rodapé: prévias da existente e da nova, slots/arquivos e remoção individual do projeto, preservando originais.
 
-- Project > Recent files persiste os 10 últimos projetos salvos/abertos e permite reabrir com um clique.
+- Project > Recent files persiste os 5 últimos projetos salvos/abertos e permite reabrir com um clique.

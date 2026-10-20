@@ -224,3 +224,5 @@ DuplicateReviewProbe passou com YTDs reais: agrupamento, duas prévias, remover 
 ### Recent files persistentes — 20/10/2026
 Project > Recent files mantém até 10 caminhos absolutos em LocalAppData/ParadiseClothStudio/recent-projects.json, ordenados por último salvamento/abertura sem duplicatas por diferença de caixa. Save, Save as, abertura, criação de projeto e importação DCT atualizam o histórico após sucesso. Clique usa o mesmo LoadProject e preserva a confirmação existente para alterações não salvas. Arquivo ausente avisa sem trocar o projeto. Histórico inválido inicia vazio e erro de persistência não transforma save/open concluído em falha.
 RecentProjectsProbe passou: gravação/leitura em nova instância, ordem/deduplicação/limite, JSON inválido, salvamento real, nova janela e clique no item recente abrindo o projeto correto. Probe usa histórico isolado para não inserir fixtures na lista do usuário. Build/publish Release concluídos.
+
+Recent files ajustado por solicitação do usuário para no máximo 5 projetos; a leitura também limita históricos anteriores a 5 entradas.
