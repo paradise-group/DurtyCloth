@@ -11,7 +11,7 @@
         <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#F0F1F2"/></Style>
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="#F0F1F2"/><Setter Property="Background" Value="#363A40"/>
-            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" Padding="8,5" BorderBrush="#51565D" BorderThickness="0,0,0,1"><ContentPresenter ContentSource="Header"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="BorderBrush" Value="#E15752"/><Setter TargetName="TabBorder" Property="BorderThickness" Value="0,0,0,2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" Padding="8,5" BorderBrush="#51565D" BorderThickness="0,0,0,1"><ContentPresenter ContentSource="Header"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="BorderBrush" Value="#9B71E8"/><Setter TargetName="TabBorder" Property="BorderThickness" Value="0,0,0,2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
         </Style>
 
         <Style TargetType="Button">
@@ -231,7 +231,7 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Error List" Click="Validate_Click"/>
                     <Button Content="Settings" Click="Settings_Click"/>
-                    <Button Content="Build project" Click="ExportAddon_Click" Background="#B9413D" Margin="0"/>
+                    <Button Content="Build project" Click="ExportAddon_Click" Background="#9B71E8" Margin="0"/>
                 </StackPanel>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock x:Name="ProjectText" Visibility="Collapsed" Foreground="#B7BDC4" FontSize="10"/>

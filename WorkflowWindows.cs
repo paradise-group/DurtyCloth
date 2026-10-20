@@ -39,7 +39,7 @@ public static class WorkflowUi
         """);
     public static readonly Brush Background = new SolidColorBrush(Color.FromRgb(29, 31, 34));
     public static readonly Brush Panel = new SolidColorBrush(Color.FromRgb(37, 40, 44));
-    public static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(185, 65, 61));
+    public static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(155, 113, 232));
     public static StackPanel Stack() => new() { Margin = new Thickness(12) };
     public static TextBox Field(Panel panel, string label, string value, bool multiline = false)
     {
@@ -98,7 +98,7 @@ public static class WorkflowUi
               <Setter Property="Foreground" Value="#F0F1F2"/><Setter Property="Background" Value="#363A40"/>
               <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
                 <Border Name="HeaderBorder" Background="{TemplateBinding Background}" Padding="8,5" BorderBrush="#51565D" BorderThickness="0,0,0,1"><ContentPresenter ContentSource="Header"/></Border>
-                <ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="HeaderBorder" Property="BorderBrush" Value="#E15752"/><Setter TargetName="HeaderBorder" Property="BorderThickness" Value="0,0,0,2"/></Trigger></ControlTemplate.Triggers>
+                <ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="HeaderBorder" Property="BorderBrush" Value="#9B71E8"/><Setter TargetName="HeaderBorder" Property="BorderThickness" Value="0,0,0,2"/></Trigger></ControlTemplate.Triggers>
               </ControlTemplate></Setter.Value></Setter>
             </Style>
             """);
