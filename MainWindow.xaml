@@ -55,6 +55,7 @@
             <MenuItem x:Name="ProjectMenu" Header="Project">
                 <MenuItem x:Name="NewProjectMenuItem" Header="New project" Click="New_Click"/>
                 <MenuItem x:Name="OpenProjectMenuItem" Header="Open project" Click="Open_Click"/>
+                <MenuItem x:Name="RecentFilesMenu" Header="Recent files"/>
                 <MenuItem Header="Save" Click="Save_Click"/>
                 <MenuItem Header="Save as" Click="SaveAs_Click"/>
                 <Separator/>

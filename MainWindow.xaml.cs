@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        RefreshRecentFilesMenu();
         Resources[typeof(ComboBox)] = WorkflowUi.ComboStyle();
         TypeBox.ItemsSource = ClothLabelConverter.TypeChoices(false).ToArray();
         MaskModelBox.ItemsSource = new[] { "None", "prop_mask_motobike", "prop_mask_motobike_a", "prop_mask_motobike_b", "prop_mask_motox", "prop_mask_flight", "prop_mask_scuba01", "prop_mask_scuba02", "prop_mask_scuba03", "prop_mask_scuba04", "prop_mask_specops", "prop_mask_ballistic", "prop_mask_bugstar", "prop_mask_fireman" };
@@ -484,6 +485,7 @@ public partial class MainWindow : Window
             _dirty = true;
             RefreshItems();
             ShowDetails(null);
+            RememberRecentProject(path);
             Status("Projeto DCT importado: " + _project.Items.Count +
                 " peças. Salve para criar um .fcsproj independente.");
             return;
@@ -497,6 +499,7 @@ public partial class MainWindow : Window
         _dirty = false;
         RefreshItems();
         ShowDetails(null);
+        RememberRecentProject(path);
         Status("Projeto aberto: " + project.Items.Count + " peças.");
     }
 
@@ -566,6 +569,7 @@ public partial class MainWindow : Window
             _dirty = false;
             RefreshItems();
             saving.Report(total, "Gravação concluída");
+            RememberRecentProject(path);
             Status($"Projeto salvo: {ProjectOperationSummary.Describe(staged)}.");
             return true;
         }
