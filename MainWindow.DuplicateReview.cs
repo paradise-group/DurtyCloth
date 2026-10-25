@@ -104,14 +104,46 @@ public partial class MainWindow
         var remove = new Button { Content = "Remover esta variante", Background = WorkflowUi.Accent,
             Margin = new Thickness(12,0,0,0), ToolTip = "Remove do projeto e preserva o arquivo de origem." };
         DockPanel.SetDock(remove, Dock.Right); title.Children.Add(remove);
+        var preview = new Button { Content = "Ver no ped 3D", Margin = new Thickness(12,0,0,0) };
+        DockPanel.SetDock(preview, Dock.Right); title.Children.Add(preview);
+        preview.Click += (_, _) => PreviewReviewedTexture(texture);
         title.Children.Add(new TextBlock { Text = $"{label} · slot {(char)('A' + texture.Slot)} (posição {texture.Slot}) · {texture.ItemName}",
             FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(220,199,255)), TextWrapping = TextWrapping.Wrap });
         content.Children.Add(title);
         content.Children.Add(new TextBlock { Text = System.IO.Path.GetFileName(texture.Path), ToolTip = texture.Path, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,3,0,5) });
         var images = new WrapPanel(); content.Children.Add(images);
         remove.Click += (_, _) => RemoveReviewedTexture(texture);
-        return (new Border { Child = content, Background = WorkflowUi.Panel, BorderBrush = new SolidColorBrush(Color.FromRgb(74,47,114)),
-            BorderThickness = new Thickness(1), Padding = new Thickness(8), Margin = new Thickness(0,0,8,6) }, images);
+        var card = new Border { Child = content, Background = WorkflowUi.Panel, BorderBrush = new SolidColorBrush(Color.FromRgb(74,47,114)),
+            BorderThickness = new Thickness(1), Padding = new Thickness(8), Margin = new Thickness(0,0,8,6),
+            Cursor = System.Windows.Input.Cursors.Hand, ToolTip = "Clique para ver esta variante no ped 3D." };
+        card.MouseLeftButtonUp += (_, e) => { PreviewReviewedTexture(texture); e.Handled = true; };
+        return (card, images);
+    }
+
+    private void PreviewReviewedTexture(ReviewTexture texture)
+    {
+        var item = _project.Items.FirstOrDefault(i => i.Id == texture.ItemId);
+        if (item is null || item.IsDummy || texture.Slot < 0 || texture.Slot >= item.TexturePaths.Count ||
+            string.IsNullOrWhiteSpace(item.TexturePaths[texture.Slot]) ||
+            !string.Equals(AbsoluteAssetPath(item.TexturePaths[texture.Slot]), texture.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            _ = RefreshDuplicateReviewAsync();
+            Status("A lista mudou; selecione a variante na comparação atualizada.");
+            return;
+        }
+        if (!ItemList.Items.Contains(item))
+        {
+            SearchBox.Text = "";
+            CategoryList.SelectedIndex = 0;
+            RefreshItems();
+        }
+        _showBasePed = true;
+        ItemList.SelectedItem = item;
+        ItemList.ScrollIntoView(item);
+        TextureList.SelectedIndex = texture.Slot;
+        if (_clothPreviewWindow is not null) _clothPreviewWindow.Close();
+        if (_currentModelData is not null) ShowModelPreview(_currentModelData);
+        Preview_Click(this, new RoutedEventArgs());
     }
 
     private void RemoveReviewedTexture(ReviewTexture texture)
