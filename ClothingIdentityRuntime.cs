@@ -10,8 +10,16 @@ O ficheiro clothing-identities.json associa esses IDs ao modelo, slot, coleção
 índice local e textura da build atual. Faça deploy do addon completo e reinicie
 o recurso para carregar o mapa atualizado.
 
-Para um recurso existente, `Keep original resource structure (add IDs only)`
-mantém as coleções, índices e metadados originais e acrescenta este adaptador.
+Para um recurso existente, `Keep original collections and add new clothes`
+mantém as coleções, índices locais e metadados originais e acrescenta este adaptador.
+As roupas novas são geradas em coleções adicionais dentro do mesmo recurso;
+o mapa combina os UUIDs existentes e novos. Position ordena as adições na sua
+nova coleção. Para inserir numa coleção addon existente, use `Insert before
+existing drawable` na peça nova: esta ocupa o índice da peça escolhida e as
+seguintes avançam, conservando os UUIDs. É necessário ter o YMT da coleção no
+recurso e ativar `Use permanent IDs in scripts`. Os conjuntos guardados devem
+usar UUIDs antes de publicar índices alterados. Outras alterações ou remoções
+dos assets originais precisam de reconstrução separada.
 Os aliases de modelos/tons de pele apontam explicitamente para o mesmo endereço
 nativo; a captura escolhe uma identidade canónica estável. Consulte
 ORIGINAL-LAYOUT.txt para nomes de origem que não puderam ser associados com

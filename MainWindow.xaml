@@ -180,6 +180,9 @@
                         <TextBox Text="{Binding SelectedItem.Id, ElementName=ItemList, Mode=OneWay}" IsReadOnly="True" Margin="0,4,0,12"/>
                         <Button Content="Generate IDs for all items" Click="GenerateClothingIds_Click" HorizontalAlignment="Left" Margin="0,0,0,12"/>
                         <TextBlock x:Name="ClothingIdentitySummary" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <TextBlock Text="Native insertion target (item UUID)"/>
+                        <TextBox Text="{Binding SelectedItem.InsertBeforeItemId, ElementName=ItemList, Mode=OneWay}" IsReadOnly="True" Margin="0,4,0,8"/>
+                        <WrapPanel><Button Content="Insert before existing drawable..." Click="InsertBeforeDrawable_Click"/><Button Content="Clear insertion" Click="ClearNativeInsertion_Click"/></WrapPanel>
                         <TextBlock Text="Building the addon exports clothing-identities.json and the clothing-ids.client.lua adapter. Scripts must store itemId + textureId and use the adapter to apply clothing. See CLOTHING-IDS.md in the generated addon." TextWrapping="Wrap"/>
                     </StackPanel></TabItem>
                     <TabItem Header="Shop Meta"><StackPanel Margin="6">

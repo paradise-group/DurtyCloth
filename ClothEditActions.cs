@@ -12,6 +12,7 @@ public static class ClothEditActions
         copy.Id = Guid.NewGuid(); copy.Gender = source.Gender == "Masculino" ? "Feminino" : "Masculino";
         copy.TextureIds = copy.TexturePaths.Select(_ => Guid.NewGuid()).ToList();
         copy.SourceIndex = null;
+        copy.InsertBeforeItemId = null;
         var group = project.Items.Where(item => item.Gender == copy.Gender && item.Category == copy.Category).ToArray();
         copy.ExportPosition = group.Length == 0 ? 0 : group.Max(item => item.ExportPosition ?? item.SourceIndex ?? 0) + 1;
         project.Items.Add(copy); return copy;

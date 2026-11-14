@@ -257,9 +257,9 @@ public sealed class BuildProjectWindow : Window
         if (types.SelectedIndex < 0) types.SelectedIndex = 2;
         panel.Children.Add(types);
         var originalRoot = OriginalResourceExporter.FindSource(project, sourceRoot);
-        var preserveOriginal = WorkflowUi.Check(panel, "Keep original resource structure (add IDs only)", originalRoot is not null);
+        var preserveOriginal = WorkflowUi.Check(panel, "Keep original collections and add new clothes", originalRoot is not null);
         var originalFolder = WorkflowUi.FolderField(panel, "Original FiveM resource folder", originalRoot ?? "", this);
-        panel.Children.Add(new TextBlock { Text = "Original mode keeps all collections, local indices, models, textures and metadata. It adds the ID map and adapter; it does not rebuild the pack or apply asset edits.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 8) });
+        panel.Children.Add(new TextBlock { Text = "Keeps original collections, tattoos and metadata. New clothes use additional collections unless you choose 'Insert before existing drawable' on the added item. Explicit insertions update the selected addon collection's indices and metadata while preserving UUIDs. Editing or removing original assets requires a separate rebuild.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 8) });
         panel.Children.Add(new TextBlock { Text = "Replace GTA DLC clothes (advanced)", Margin = new Thickness(0, 10, 0, 0) });
         var replace = WorkflowUi.Check(panel, "Show GTA DLC replace options", project.ReplaceDlcCollection);
         replace.IsEnabled = project.Items.Count > 0;
@@ -315,7 +315,7 @@ public sealed class BuildProjectWindow : Window
         panel.Children.Add(buildBar);
         var buildContents = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
         void UpdateBuildContents() => buildContents.Text = preserveOriginal.IsChecked == true && types.SelectedIndex == 2
-            ? "Build: complete original resource with its existing tattoo assets and metadata, plus permanent IDs."
+            ? "Build: complete original resource, added clothing collections and one combined permanent-ID map."
             : $"Build: {project.Items.Count} items, {project.Items.Sum(item => item.TexturePaths.Count)} textures, {(includeTattoos.IsChecked == true ? project.Tattoos.Count : 0)} tattoos.";
         void UpdateMode()
         {
@@ -374,7 +374,8 @@ public sealed class BuildProjectWindow : Window
                 {
                     var originalPath = originalFolder.Text;
                     IProgress<string> copyProgress = new Progress<string>(message => progress.Text = message);
-                    OutputPath = await Task.Run(() => OriginalResourceExporter.Export(snapshot, resolve, originalPath, parent, copyProgress));
+                    var gameFolder = GamePedAssets.FindGameFolder();
+                    OutputPath = await Task.Run(() => ResourceUpdateExporter.Export(snapshot, resolve, originalPath, parent, copyProgress, gameFolder));
                 }
                 else
                 {
@@ -394,8 +395,8 @@ public sealed class BuildProjectWindow : Window
                 progress.Text = $"Exportação concluída: {ProjectOperationSummary.Describe(snapshot)}.\n\n" + OutputPath;
                 if (originalBuild)
                 {
-                    var unavailable = OriginalResourceExporter.Describe(snapshot).Entries.Count(entry => !entry.Available);
-                    progress.Text += "\n\nOriginal collections, indices and metadata were retained.";
+                    var unavailable = ClothingIdentityMap.Read(Path.Combine(OutputPath, ClothingIdentityMap.FileName)).Entries.Count(entry => !entry.Available);
+                    progress.Text += "\n\nOriginal collections were retained. Added clothes and any explicit native insertions are included, with UUIDs preserved.";
                     if (unavailable > 0) progress.Text += $"\n{unavailable} nonstandard source model names were copied but are not exposed as equippable IDs. Review ORIGINAL-LAYOUT.txt before mapping these entries.";
                 }
                 busy = false; panel.IsEnabled = true;

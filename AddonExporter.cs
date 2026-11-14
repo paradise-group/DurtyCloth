@@ -37,8 +37,8 @@ public static class AddonExporter
         if (shortName.Length == 0) shortName = "roupas";
         if (!string.IsNullOrWhiteSpace(project.DlcName))
         {
-            if (!Regex.IsMatch(project.DlcName, "^[a-z0-9_]{1,24}$"))
-                throw new InvalidDataException("DLC Name must use 1–24 lowercase letters, numbers or underscores.");
+            if (!Regex.IsMatch(project.DlcName, "^[a-z0-9_]+$"))
+                throw new InvalidDataException("DLC Name must use lowercase letters, numbers or underscores.");
             shortName = project.DlcName;
         }
         var resourceName = project.ReplaceDlcCollection ? project.ReplacementResource : shortName;

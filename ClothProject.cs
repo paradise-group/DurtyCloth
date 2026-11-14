@@ -116,6 +116,7 @@ public sealed class ClothItem
     public string Category { get; set; } = "Outros";
     public int? SourceIndex { get; set; }
     public int? ExportPosition { get; set; }
+    public Guid? InsertBeforeItemId { get; set; }
     public string ModelPath { get; set; } = "";
     public string? OriginalModelFileName { get; set; }
     public List<string> AlternateModelPaths { get; set; } = [];

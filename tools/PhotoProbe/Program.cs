@@ -30,7 +30,7 @@ internal static class Program
             var root = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
             var window = new BuildProjectWindow(project, path => Path.IsPathRooted(path) ? path : Path.Combine(root, path));
             var panel = (System.Windows.Controls.StackPanel)((System.Windows.Controls.ScrollViewer)window.Content).Content;
-            var preserve = panel.Children.OfType<System.Windows.Controls.CheckBox>().Single(box => box.Content.ToString()!.StartsWith("Keep original resource"));
+            var preserve = panel.Children.OfType<System.Windows.Controls.CheckBox>().Single(box => box.Content.ToString()!.StartsWith("Keep original collections"));
             var tattoos = panel.Children.OfType<System.Windows.Controls.CheckBox>().Single(box => box.Content.ToString()!.StartsWith("Include tattoos"));
             if (preserve.IsChecked != true || tattoos.IsEnabled || tattoos.IsChecked == true) throw new Exception("Wrong preservation/tattoo defaults.");
             preserve.IsChecked = false;

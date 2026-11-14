@@ -54,6 +54,8 @@ public partial class MainWindow
         menu.Items.Add(new Separator());
         ContextEntry(menu, "Copy Name", () => Clipboard.SetText(item.Name));
         ContextEntry(menu, "Copy Permanent ID", () => Clipboard.SetText(item.Id.ToString("D")));
+        ContextEntry(menu, "Insert before existing drawable...", () => InsertBeforeDrawable_Click(sender, new RoutedEventArgs()), !item.IsDummy);
+        ContextEntry(menu, "Clear native insertion", () => ClearNativeInsertion_Click(sender, new RoutedEventArgs()), item.InsertBeforeItemId.HasValue);
         ContextEntry(menu, "Copy Game Name", () => Clipboard.SetText(Path.GetFileNameWithoutExtension(item.OriginalModelFileName ?? item.ModelPath)), !item.IsDummy);
         ContextEntry(menu, "Copy File Path", () => Clipboard.SetText(AbsoluteAssetPath(item.ModelPath)), !item.IsDummy);
         ContextEntry(menu, "Rename", RenameSelectedItem);

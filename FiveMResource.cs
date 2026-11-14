@@ -59,6 +59,7 @@ public sealed record FiveMResource(string Root, int FileCount, long TotalBytes)
             var directory = pending.Pop();
             foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
             {
+                if (Path.GetFileName(entry).Equals(".git", StringComparison.OrdinalIgnoreCase)) continue;
                 var attributes = File.GetAttributes(entry);
                 if (attributes.HasFlag(FileAttributes.ReparsePoint))
                     throw new InvalidDataException("Links de pasta ou arquivo não são aceitos: " + entry);
