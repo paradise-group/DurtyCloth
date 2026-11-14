@@ -72,8 +72,10 @@
                 <MenuItem Header="Export selected drawable" Click="ExportItemFiles_Click"/>
                 <MenuItem Header="Export selected package" Click="ExportItemBundle_Click"/>
                 <MenuItem Header="Export stream" Click="Export_Click"/>
+                <MenuItem Header="Export preview photos" Click="ExportPreviewPhotos_Click"/>
+                <MenuItem Header="Generate permanent IDs for all items" Click="GenerateClothingIds_Click"/>
             </MenuItem>
-            <MenuItem Header="View"><MenuItem Header="Error List" Click="Validate_Click"/></MenuItem>
+            <MenuItem Header="View"><MenuItem Header="Error List" Click="Validate_Click"/><MenuItem Header="Appearance assets" Click="ShowAppearanceAssets_Click"/></MenuItem>
             <MenuItem Header="Help" Click="Help_Click"/>
         </Menu>
         <Grid Grid.Row="1" Margin="4,8,4,16">
@@ -92,6 +94,7 @@
                     <StackPanel Grid.Row="0" Margin="6">
                         <TextBlock Text="Drawables" Margin="0,0,0,4"/>
                         <Grid><TextBox x:Name="SearchBox" TextChanged="Filter_Changed" ToolTip="Enter search term (CTRL+F)"/><TextBlock Text="Enter search term (CTRL+F)" FontStyle="Italic" Foreground="#A8ADB4" VerticalAlignment="Center" Margin="6,0" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></Grid>
+                        <WrapPanel Margin="0,5,0,0"><Button Content="Expand all" Click="ExpandAllCategories_Click"/><Button Content="Collapse all" Click="CollapseAllCategories_Click"/></WrapPanel>
                         <ComboBox x:Name="CategoryList" Visibility="Collapsed" SelectionChanged="Filter_Changed" Margin="0,4,0,0"/>
                     </StackPanel>
                     <ListBox x:Name="ItemList" Grid.Row="1" Margin="6,0" IsSynchronizedWithCurrentItem="False" SelectionChanged="ItemList_SelectionChanged" MouseDoubleClick="PreviewList_DoubleClick" PreviewMouseRightButtonDown="SelectContextRow" ContextMenuOpening="ItemContextMenu_Opening">
@@ -172,6 +175,13 @@
                             </StackPanel>
                         </Grid>
                     </Grid></TabItem>
+                    <TabItem Header="Permanent IDs"><StackPanel Margin="6">
+                        <TextBlock Text="Item ID (preserved when renaming or reordering)"/>
+                        <TextBox Text="{Binding SelectedItem.Id, ElementName=ItemList, Mode=OneWay}" IsReadOnly="True" Margin="0,4,0,12"/>
+                        <Button Content="Generate IDs for all items" Click="GenerateClothingIds_Click" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="ClothingIdentitySummary" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <TextBlock Text="Building the addon exports clothing-identities.json and the clothing-ids.client.lua adapter. Scripts must store itemId + textureId and use the adapter to apply clothing. See CLOTHING-IDS.md in the generated addon." TextWrapping="Wrap"/>
+                    </StackPanel></TabItem>
                     <TabItem Header="Shop Meta"><StackPanel Margin="6">
                         <TextBlock Text="Cost"/><TextBox x:Name="ShopCostBox" LostFocus="Metadata_LostFocus" Margin="0,4,0,12"/>
                         <TextBlock Text="Text label"/><TextBox x:Name="ShopLabelBox" LostFocus="Metadata_LostFocus" Margin="0,4,0,12"/>

@@ -49,7 +49,7 @@ public static class CollectionIndices
     }
 
     public static bool IsPublished(ClothProject project, ClothItem item) =>
-        project.PublishedCollection?.Drawables.Any(entry => entry.ItemId == item.Id) == true;
+        !project.UsePermanentClothingIds && project.PublishedCollection?.Drawables.Any(entry => entry.ItemId == item.Id) == true;
 
     public static void Append(ClothProject project, ClothItem item)
     {
@@ -83,6 +83,8 @@ public static class CollectionIndices
         var errors = new List<string>();
         if (project.Items.Select(item => item.Id).Distinct().Count() != project.Items.Count)
             errors.Add("Erro: identificadores de drawable duplicados.");
+        if (project.Items.Any(item => item.Id == Guid.Empty)) errors.Add("Erro: ID permanente de peça vazio.");
+        if (project.UsePermanentClothingIds) return errors;
         if (project.PublishedCollection is not { } published) return errors;
         if (project.DlcName != published.DlcName || project.RemoveDefaultCollectionPrefix != published.RemoveDefaultCollectionPrefix ||
             project.ReplaceDlcCollection != published.ReplaceDlcCollection ||

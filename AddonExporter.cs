@@ -23,6 +23,7 @@ public static class AddonExporter
 
     public static string Export(ClothProject project, Func<string, string> resolvePath, string parentFolder)
     {
+        foreach (var item in project.Items) ClothingIdentityMap.EnsureTextures(item);
         CollectionIndices.EnsureValid(project);
         var items = project.Items.ToArray();
         if (items.Length == 0 && project.Tattoos.Count == 0) throw new InvalidDataException("O projeto não contém peças ou tatuagens.");
@@ -189,7 +190,9 @@ public static class AddonExporter
             if (!project.DisableExtraAlternateVariationFeatures && HairVariations.Write(Path.Combine(output, "pedalternatevariations.meta"), project, collectionByGender)
                 && !manifestFiles.Contains("pedalternatevariations.meta")) manifestFiles.Add("pedalternatevariations.meta");
             manifestFiles.AddRange(TattooExporter.Write(project, resolvePath, output, shortName));
-            var manifest = new StringBuilder("fx_version 'cerulean'\ngame 'gta5'\n\nfiles {\n");
+            ClothingIdentityMap.Write(project, output);
+            manifestFiles.Add(ClothingIdentityMap.FileName);
+            var manifest = new StringBuilder("fx_version 'cerulean'\ngame 'gta5'\n\nclient_script 'clothing-ids.client.lua'\n\nfiles {\n");
             foreach (var name in manifestFiles) manifest.AppendLine("  '" + name + "',");
             manifest.AppendLine("}\n");
             static string Lua(string value) => "'" + value.Replace("\\", "\\\\").Replace("'", "\\'")
@@ -199,7 +202,8 @@ public static class AddonExporter
             if (!string.IsNullOrWhiteSpace(project.Description)) manifest.AppendLine("description " + Lua(project.Description));
             if (project.TargetGameBuild > 0) manifest.AppendLine("dependency '/gameBuild:" + project.TargetGameBuild + "'");
             foreach (var name in manifestFiles)
-                manifest.AppendLine("data_file '" + FirstPersonMetadata.TypeOf(name) + "' '" + name + "'");
+                if (name != ClothingIdentityMap.FileName)
+                    manifest.AppendLine("data_file '" + FirstPersonMetadata.TypeOf(name) + "' '" + name + "'");
             File.WriteAllText(Path.Combine(output, "fxmanifest.lua"), manifest.ToString(), Utf8);
             if (project.CreateClothesInfoDump)
                 File.WriteAllText(Path.Combine(output, "clothes-info.json"), JsonSerializer.Serialize(

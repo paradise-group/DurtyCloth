@@ -1,11 +1,16 @@
 using System.IO;
 using System.Globalization;
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
+using CodeWalker.GameFiles;
 
 namespace FooxClothStudio;
 
 public static class TattooImporter
 {
+    public static bool LooksLikeTattooYtd(string path) =>
+        Regex.IsMatch(Path.GetFileName(path), @"(?:tattoo|(?:^|_)tat(?:_|\d|\.))", RegexOptions.IgnoreCase);
+
     public static List<TattooItem> Import(string resourceRoot)
     {
         resourceRoot = Path.GetFullPath(resourceRoot);
@@ -33,7 +38,34 @@ public static class TattooImporter
                 if (shop is not null && int.TryParse(shop.Element("cost")?.Attribute("value")?.Value, out var cost) && cost >= 0) item.Cost = cost;
             }
         }
-        if (results.Count == 0) throw new InvalidDataException("No tattoo overlays found in this resource.");
+        // Some resources ship only tattoo YTDs. Keep their textures visible in the
+        // editor, but leave the zone unset because the YTD does not encode placement.
+        var known = results.Select(item => (Path.GetFullPath(item.ImagePath), item.SourceTextureName))
+            .ToHashSet();
+        var usedNames = results.Select(item => item.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in Directory.EnumerateFiles(resourceRoot, "*.ytd", SearchOption.AllDirectories)
+            .Where(LooksLikeTattooYtd))
+        {
+            var ytd = new YtdFile();
+            try { ytd.Load(File.ReadAllBytes(path)); }
+            catch (Exception) { continue; }
+            foreach (var texture in ytd.TextureDict?.Textures?.data_items ?? [])
+            {
+                if (texture?.Name is null || known.Contains((Path.GetFullPath(path), texture.Name))) continue;
+                var stem = Regex.Replace(Path.GetFileNameWithoutExtension(path) + "_" + texture.Name,
+                    "[^a-zA-Z0-9_]", "_");
+                stem = stem.Length > 42 ? stem[..42] : stem;
+                var name = stem; var suffix = 1;
+                while (!usedNames.Add(name)) name = stem[..Math.Min(stem.Length, 42)] + "_" + suffix++;
+                results.Add(new TattooItem
+                {
+                    Name = name, Label = Path.GetFileNameWithoutExtension(path) + " / " + texture.Name,
+                    ImagePath = path, SourceTextureName = texture.Name,
+                    Zone = "", Gender = "Both"
+                });
+            }
+        }
+        if (results.Count == 0) throw new InvalidDataException("No tattoo overlays or tattoo textures found in this resource.");
         return results;
     }
 }

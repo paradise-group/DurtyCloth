@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../FooxClothStudio.csproj" />
+    <Reference Include="CodeWalker.Core"><HintPath>../../deps/CodeWalker/CodeWalker.Core.dll</HintPath></Reference>
+    <Reference Include="SharpDX.Mathematics"><HintPath>../../deps/CodeWalker/SharpDX.Mathematics.dll</HintPath></Reference>
+    <Reference Include="SharpDX"><HintPath>../../deps/CodeWalker/SharpDX.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

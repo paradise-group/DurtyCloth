@@ -11,7 +11,9 @@ public sealed class ClothProject
     public string Version { get; set; } = "";
     public string Description { get; set; } = "";
     public string DlcName { get; set; } = "";
+    public string? SourceResourceRoot { get; set; }
     public PublishedCollectionSnapshot? PublishedCollection { get; set; }
+    public bool UsePermanentClothingIds { get; set; }
     public double ModelWarningMiB { get; set; } = 4;
     public double TextureWarningMiB { get; set; } = 4;
     public string OutputFolder { get; set; } = "";
@@ -33,6 +35,7 @@ public sealed class ClothProject
     public bool CreateEsxTattooConfig { get; set; }
     public bool CreateMenyooTattooConfig { get; set; }
     public List<TattooItem> Tattoos { get; set; } = [];
+    public List<AppearanceAsset> AppearanceAssets { get; set; } = [];
     public bool ReplaceWithDummyOnRemove { get; set; }
     public bool ReplaceDummiesOnAdding { get; set; }
     public string? SourceDlcName { get; set; }
@@ -72,12 +75,22 @@ public sealed class TattooItem
     public float CameraY { get; set; } = 0.4f;
     public float CameraZ { get; set; } = 0.3f;
     public float CameraHeading { get; set; } = 117.3f;
-    public override string ToString() => Name + " • " + Gender + " • " + Zone;
+    public override string ToString() => Name + " • " + Gender + " • " + (string.IsNullOrEmpty(Zone) ? "Zona por definir" : Zone);
+}
+
+public sealed class AppearanceAsset
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string Kind { get; set; } = "Outros";
+    public string Gender { get; set; } = "Both";
+    public string TexturePath { get; set; } = "";
 }
 
 public sealed class ClothItem
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public List<Guid> TextureIds { get; set; } = [];
     public long? ModelSizeBytes { get; set; }
     public long? MaxTextureSizeBytes { get; set; }
     [JsonIgnore] public string? MetricsKey { get; set; }

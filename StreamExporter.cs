@@ -20,7 +20,7 @@ public static class StreamExporter
                 var source = Path.GetFullPath(asset.Source);
                 if (files.TryGetValue(asset.Name, out var previous))
                 {
-                    if (!string.Equals(previous, source, StringComparison.OrdinalIgnoreCase))
+                    if (!AssetContent.Equivalent(previous, source))
                         throw new InvalidDataException("Duas peças geram o mesmo nome no stream: " + asset.Name);
                     continue;
                 }

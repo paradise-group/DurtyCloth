@@ -46,8 +46,55 @@ public sealed class TattooWindow : Window
         var cameraZ = WorkflowUi.Field(shop, "ESX preview camera Z", "0.3");
         var cameraHeading = WorkflowUi.Field(shop, "ESX preview camera heading", "117.3");
         var preview = new Image { Height = 400, Stretch = Stretch.Uniform }; tabs.Items.Add(new TabItem { Header = "Texture Preview", Content = preview });
+        var pedPreviewPanel = WorkflowUi.Stack();
+        var pedGender = new ComboBox { ItemsSource = new[] { "Male", "Female" }, SelectedIndex = 0, Width = 120,
+            HorizontalAlignment = HorizontalAlignment.Left };
+        pedPreviewPanel.Children.Add(pedGender);
+        var pedPreview = new Image { Height = 430, Stretch = Stretch.Uniform, Margin = new Thickness(0, 8, 0, 8) };
+        pedPreviewPanel.Children.Add(pedPreview);
+        var pedPreviewStatus = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        pedPreviewPanel.Children.Add(pedPreviewStatus);
+        tabs.Items.Add(new TabItem { Header = "Ped Preview", Content = pedPreviewPanel });
         var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) }; right.Children.Add(status);
         TattooItem? selected = null; bool updating = false;
+        var pedLoads = new Dictionary<string, Task<PhotoPed>>(StringComparer.OrdinalIgnoreCase);
+        var pedRequest = 0;
+        async void ShowPedPreview(TattooItem? item)
+        {
+            var request = ++pedRequest;
+            pedPreview.Source = null;
+            if (item is null) { pedPreviewStatus.Text = "Selecione uma tatuagem."; return; }
+            var gameFolder = GamePedAssets.FindGameFolder();
+            if (gameFolder is null) { pedPreviewStatus.Text = "Configure a pasta do GTA V na janela 3D Preview Cloth."; return; }
+            var chosenGender = pedGender.SelectedItem as string ?? "Male";
+            var genderKey = chosenGender == "Female" ? "Feminino" : "Masculino";
+            var snapshot = JsonSerializer.Deserialize<TattooItem>(JsonSerializer.Serialize(item))!;
+            try
+            {
+                pedPreviewStatus.Text = "A preparar prévia no ped...";
+                if (!pedLoads.TryGetValue(genderKey, out var pedTask))
+                    pedLoads[genderKey] = pedTask = Task.Run(() => PreviewPhotoRenderer.LoadPed(gameFolder, genderKey));
+                var pedData = await pedTask;
+                var texture = await Task.Run(() => TattooExporter.ReadImage(snapshot, resolve(snapshot.ImagePath)));
+                if (request != pedRequest) return;
+                var bitmap = MainWindow.DecodeTextureBitmap(texture, 1024);
+                pedPreview.Source = string.IsNullOrEmpty(snapshot.Zone)
+                    ? PreviewPhotoRenderer.RenderUnplacedTattoo(bitmap, pedData, Colors.Lime)
+                    : PreviewPhotoRenderer.RenderTattoo(snapshot, bitmap, pedData, Colors.Lime);
+                pedPreviewStatus.Text = string.IsNullOrEmpty(snapshot.Zone)
+                    ? "Zona por definir: textura ao lado do ped. Escolha a zona e clique Atualizar prévia."
+                    : "Prévia aproximada da posição no ped. Clique Atualizar prévia após editar UV ou zona.";
+            }
+            catch (Exception ex)
+            {
+                if (request == pedRequest)
+                {
+                    pedPreviewStatus.Text = "Prévia no ped indisponível: " + ex.Message;
+                    pedLoads.Remove(genderKey);
+                }
+            }
+        }
+        pedGender.SelectionChanged += (_, _) => ShowPedPreview(selected);
         string Number(float value) => value.ToString("R", CultureInfo.InvariantCulture);
         void Refresh() { list.ItemsSource = null; list.ItemsSource = Result; }
         bool Commit()
@@ -58,13 +105,14 @@ public sealed class TattooWindow : Window
                 var candidate = JsonSerializer.Deserialize<TattooItem>(JsonSerializer.Serialize(selected))!;
                 candidate.Name = name.Text.Trim(); candidate.Label = label.Text;
                 candidate.SourceTextureName = textureName.Text.Trim(); candidate.Gender = gender.SelectedItem as string ?? "Both";
-                candidate.Zone = zone.SelectedItem as string ?? "ZONE_TORSO";
+                candidate.Zone = zone.SelectedItem as string ?? "";
                 candidate.U = float.Parse(u.Text, CultureInfo.InvariantCulture); candidate.V = float.Parse(v.Text, CultureInfo.InvariantCulture);
                 candidate.ScaleX = float.Parse(sx.Text, CultureInfo.InvariantCulture); candidate.ScaleY = float.Parse(sy.Text, CultureInfo.InvariantCulture);
                 candidate.Rotation = float.Parse(rotation.Text, CultureInfo.InvariantCulture); candidate.Cost = int.Parse(cost.Text);
                 candidate.CameraX = float.Parse(cameraX.Text, CultureInfo.InvariantCulture); candidate.CameraY = float.Parse(cameraY.Text, CultureInfo.InvariantCulture);
                 candidate.CameraZ = float.Parse(cameraZ.Text, CultureInfo.InvariantCulture); candidate.CameraHeading = float.Parse(cameraHeading.Text, CultureInfo.InvariantCulture);
-                TattooExporter.Validate(candidate);
+                if (candidate.Zone.Length > 0) TattooExporter.Validate(candidate);
+                else if (selected.Zone.Length > 0) throw new InvalidDataException("Escolha uma zona antes de guardar esta tatuagem.");
                 if (Result.Any(x => x.Id != candidate.Id && x.Name.Equals(candidate.Name, StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("Tattoo name already exists.");
                 TattooExporter.ReadImage(candidate, resolve(candidate.ImagePath));
                 selected.Name = candidate.Name; selected.Label = candidate.Label; selected.SourceTextureName = candidate.SourceTextureName;
@@ -83,12 +131,14 @@ public sealed class TattooWindow : Window
             u.Text = Number(item?.U ?? 0.5f); v.Text = Number(item?.V ?? 0.5f); sx.Text = Number(item?.ScaleX ?? 0.5f); sy.Text = Number(item?.ScaleY ?? 0.5f);
             rotation.Text = Number(item?.Rotation ?? 0); cost.Text = (item?.Cost ?? 100).ToString(); preview.Source = null;
             cameraX.Text = Number(item?.CameraX ?? 0.7f); cameraY.Text = Number(item?.CameraY ?? 0.4f); cameraZ.Text = Number(item?.CameraZ ?? 0.3f); cameraHeading.Text = Number(item?.CameraHeading ?? 117.3f);
+            ShowPedPreview(item);
             if (item is null) return;
             try
             {
                 var texture = TattooExporter.ReadImage(item, resolve(item.ImagePath)); var pixels = DDSIO.GetPixels(texture, 0);
                 var bitmap = BitmapSource.Create(texture.Width, texture.Height, 96, 96, PixelFormats.Bgra32, null, pixels, texture.Width * 4); bitmap.Freeze(); preview.Source = bitmap;
-                status.Text = texture.Width + " × " + texture.Height + " • " + texture.Levels + " mipmaps";
+                status.Text = texture.Width + " × " + texture.Height + " • " + texture.Levels + " mipmaps" +
+                    (string.IsNullOrEmpty(item.Zone) ? " • Zona por definir: escolha a zona antes de exportar a tatuagem." : "");
             }
             catch (Exception ex) { status.Text = ex.Message; }
         }
@@ -99,6 +149,10 @@ public sealed class TattooWindow : Window
             if (!Commit()) { updating = true; list.SelectedItem = selected; updating = false; return; }
             ShowItem(next);
         };
+        WorkflowUi.Button(pedPreviewPanel, "Atualizar prévia", (_, _) =>
+        {
+            if (Commit()) ShowPedPreview(selected);
+        });
         WorkflowUi.Button(left, "Add tattoo", (_, _) =>
         {
             if (!Commit()) return;

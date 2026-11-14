@@ -158,7 +158,7 @@ public partial class MainWindow
         if (_project.ReplaceWithDummyOnRemove)
         { item.TexturePaths[index] = ""; item.OriginalTextureFileNames[index] = "(dummy)"; item.TextureEffects[index] = new TextureEffect(); item.TextureLabels[index] = ""; }
         else
-        { item.TexturePaths.RemoveAt(index); item.OriginalTextureFileNames.RemoveAt(index); item.TextureEffects.RemoveAt(index); item.TextureLabels.RemoveAt(index); }
+        { item.TexturePaths.RemoveAt(index); item.TextureIds.RemoveAt(index); item.OriginalTextureFileNames.RemoveAt(index); item.TextureEffects.RemoveAt(index); item.TextureLabels.RemoveAt(index); }
         _dirty = true;
         if (ItemList.SelectedItem is ClothItem selected && selected.Id == item.Id) RefreshTextureList(item, Math.Min(index, item.TexturePaths.Count - 1));
         RefreshItems();

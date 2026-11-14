@@ -162,11 +162,24 @@ public sealed class ProjectSettingsWindow : Window
         var duplicates = WorkflowUi.Check(general, "Always import duplicates without confirmation", project.AlwaysImportDuplicates);
         var dummyRemove = WorkflowUi.Check(general, "Automatically replace with dummies on remove", project.ReplaceWithDummyOnRemove);
         var dummyAdd = WorkflowUi.Check(general, "Automatically replace dummies when adding clothes", project.ReplaceDummiesOnAdding);
+        var permanentIds = WorkflowUi.Check(general, "Use permanent IDs in scripts (allows reordering items and variants)", project.UsePermanentClothingIds);
+        general.Children.Add(new TextBlock { Text = "Enable after integrating the adapter into clothing, uniform and wardrobe systems and migrating saved data to itemId + textureId. Collection + local index alone does not track reordering within a collection.", TextWrapping = TextWrapping.Wrap });
         if (project.PublishedCollection is not null) dummyAdd.IsEnabled = false;
         var published = WorkflowUi.Check(general, "Collection publicada: proteger índices (irreversível neste projeto)", project.PublishedCollection is not null);
         published.IsEnabled = project.PublishedCollection is null;
         var updatePublished = WorkflowUi.Check(general, "Registrar também as novas peças como publicadas", false);
         updatePublished.Visibility = project.PublishedCollection is null ? Visibility.Collapsed : Visibility.Visible;
+        void UpdateIdentityMode()
+        {
+            var locked = project.PublishedCollection is not null && permanentIds.IsChecked != true;
+            projectName.IsReadOnly = locked; dlc.IsReadOnly = locked;
+            dummyAdd.IsEnabled = !locked;
+            published.IsEnabled = project.PublishedCollection is null && permanentIds.IsChecked != true;
+            updatePublished.IsEnabled = permanentIds.IsChecked != true;
+        }
+        permanentIds.Checked += (_, _) => UpdateIdentityMode();
+        permanentIds.Unchecked += (_, _) => UpdateIdentityMode();
+        UpdateIdentityMode();
         var folders = WorkflowUi.Check(general, "Create sub folders for cloth drawable types", project.CreateDrawableSubfolders);
         var dump = WorkflowUi.Check(general, "Create clothes info dump", project.CreateClothesInfoDump);
         var modelLimit = WorkflowUi.Field(general, "Model size warning (MiB)", project.ModelWarningMiB.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -188,12 +201,13 @@ public sealed class ProjectSettingsWindow : Window
             Result.AlwaysImportDuplicates = duplicates.IsChecked == true;
             Result.ReplaceWithDummyOnRemove = dummyRemove.IsChecked == true;
             Result.ReplaceDummiesOnAdding = dummyAdd.IsChecked == true;
+            Result.UsePermanentClothingIds = permanentIds.IsChecked == true;
             Result.CreateDrawableSubfolders = folders.IsChecked == true;
             Result.CreateClothesInfoDump = dump.IsChecked == true;
             try
             {
                 CollectionIndices.EnsureValid(Result);
-                if ((published.IsChecked == true && project.PublishedCollection is null) || updatePublished.IsChecked == true)
+                if (!Result.UsePermanentClothingIds && ((published.IsChecked == true && project.PublishedCollection is null) || updatePublished.IsChecked == true))
                 {
                     if (MessageBox.Show(this, "Confirma que estes índices e o DLC name correspondem à collection publicada no servidor? Eles serão protegidos; novas peças devem entrar no final e remoções devem usar Replace with Dummy.",
                         "Publicar collection", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
@@ -230,7 +244,7 @@ public sealed class BuildProjectWindow : Window
 {
     public string? OutputPath { get; private set; }
     public ClothProject? Result { get; private set; }
-    public BuildProjectWindow(ClothProject project, Func<string, string> resolve)
+    public BuildProjectWindow(ClothProject project, Func<string, string> resolve, string? sourceRoot = null)
     {
         WorkflowUi.Theme(this, "Build Project", 360, 690);
         var panel = WorkflowUi.Stack(); Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = panel };
@@ -242,6 +256,10 @@ public sealed class BuildProjectWindow : Window
         types.SelectedIndex = Array.IndexOf(new[] { "alt:V Resource", "Single player RPF", "FiveM Resource", "RageMP Resource" }, project.BuildTarget);
         if (types.SelectedIndex < 0) types.SelectedIndex = 2;
         panel.Children.Add(types);
+        var originalRoot = OriginalResourceExporter.FindSource(project, sourceRoot);
+        var preserveOriginal = WorkflowUi.Check(panel, "Keep original resource structure (add IDs only)", originalRoot is not null);
+        var originalFolder = WorkflowUi.FolderField(panel, "Original FiveM resource folder", originalRoot ?? "", this);
+        panel.Children.Add(new TextBlock { Text = "Original mode keeps all collections, local indices, models, textures and metadata. It adds the ID map and adapter; it does not rebuild the pack or apply asset edits.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 8) });
         panel.Children.Add(new TextBlock { Text = "Replace GTA DLC clothes (advanced)", Margin = new Thickness(0, 10, 0, 0) });
         var replace = WorkflowUi.Check(panel, "Show GTA DLC replace options", project.ReplaceDlcCollection);
         replace.IsEnabled = project.Items.Count > 0;
@@ -257,7 +275,7 @@ public sealed class BuildProjectWindow : Window
         var name = WorkflowUi.Field(panel, "Clothes collection name", string.IsNullOrWhiteSpace(project.DlcName) ? (suggestedName.Length == 0 ? "roupas" : suggestedName) : project.DlcName);
         var prefix = WorkflowUi.Check(panel, "Remove default added prefix (mp_m/mp_f)", project.RemoveDefaultCollectionPrefix);
         prefix.IsEnabled = project.Items.Count > 0;
-        if (project.PublishedCollection is not null)
+        if (project.PublishedCollection is not null && !project.UsePermanentClothingIds)
         {
             name.IsReadOnly = true; prefix.IsEnabled = replace.IsEnabled = false;
             replacementResource.IsReadOnly = replacementMale.IsReadOnly = replacementFemale.IsReadOnly = true;
@@ -269,20 +287,54 @@ public sealed class BuildProjectWindow : Window
         var alternate = WorkflowUi.Check(panel, "Disable extra alternate variation features", project.DisableExtraAlternateVariationFeatures);
         var dump = WorkflowUi.Check(panel, "Create clothes info dump", project.CreateClothesInfoDump);
         folders.IsEnabled = extraYmt.IsEnabled = alternate.IsEnabled = dump.IsEnabled = project.Items.Count > 0;
+        var missingTattooZones = project.Tattoos.Count(tattoo => string.IsNullOrWhiteSpace(tattoo.Zone));
+        var includeTattoos = WorkflowUi.Check(panel, $"Include tattoos ({project.Tattoos.Count} in project)", project.Tattoos.Count > 0 && missingTattooZones == 0);
+        includeTattoos.IsEnabled = project.Tattoos.Count > 0;
+        var missingTattooNote = new TextBlock { Text = $"{missingTattooZones} tattoos have no body zone. They are excluded from rebuilt addons by default and remain in the project. Original mode copies existing tattoo assets as-is.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 8), Visibility = missingTattooZones > 0 ? Visibility.Visible : Visibility.Collapsed };
+        panel.Children.Add(missingTattooNote);
         var tattooDump = WorkflowUi.Check(panel, "Create tattoos info dump", project.CreateTattoosInfoDump);
         var illenium = WorkflowUi.Check(panel, "Create illenium-appearance tattoo config file (FiveM)", project.CreateIlleniumConfig);
         var esx = WorkflowUi.Check(panel, "Create ESX-TattooShop config file (FiveM)", project.CreateEsxTattooConfig);
         var menyoo = WorkflowUi.Check(panel, "Create Menyoo PedDecalOverlays.xml", project.CreateMenyooTattooConfig);
         tattooDump.IsEnabled = illenium.IsEnabled = esx.IsEnabled = menyoo.IsEnabled = project.Tattoos.Count > 0;
+        void UpdateTattooOptions() => tattooDump.IsEnabled = illenium.IsEnabled = esx.IsEnabled = menyoo.IsEnabled = includeTattoos.IsChecked == true;
+        includeTattoos.Checked += (_, _) => UpdateTattooOptions();
+        includeTattoos.Unchecked += (_, _) => UpdateTattooOptions();
+        UpdateTattooOptions();
         var orderPanel = new StackPanel(); panel.Children.Add(orderPanel);
         var order = WorkflowUi.Field(orderPanel, "DLC load order", project.SingleplayerSetupOrder.ToString());
-        void UpdateTarget() => orderPanel.Visibility = types.SelectedIndex is 1 or 3 ? Visibility.Visible : Visibility.Collapsed;
+        void UpdateTarget()
+        {
+            orderPanel.Visibility = types.SelectedIndex is 1 or 3 ? Visibility.Visible : Visibility.Collapsed;
+            preserveOriginal.IsEnabled = types.SelectedIndex == 2;
+        }
         types.SelectionChanged += (_, _) => UpdateTarget(); UpdateTarget();
         var output = WorkflowUi.FolderField(panel, "Build output folder", project.OutputFolder, this);
         var progress = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) }; panel.Children.Add(progress);
         var buildBar = new ProgressBar { Height = 8, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
         panel.Children.Add(buildBar);
-        panel.Children.Add(new TextBlock { Text = ProjectOperationSummary.Describe(project), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) });
+        var buildContents = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+        void UpdateBuildContents() => buildContents.Text = preserveOriginal.IsChecked == true && types.SelectedIndex == 2
+            ? "Build: complete original resource with its existing tattoo assets and metadata, plus permanent IDs."
+            : $"Build: {project.Items.Count} items, {project.Items.Sum(item => item.TexturePaths.Count)} textures, {(includeTattoos.IsChecked == true ? project.Tattoos.Count : 0)} tattoos.";
+        void UpdateMode()
+        {
+            var original = preserveOriginal.IsChecked == true && types.SelectedIndex == 2;
+            originalFolder.IsEnabled = original;
+            name.IsEnabled = !original;
+            replace.IsEnabled = !original && project.Items.Count > 0 && (project.PublishedCollection is null || project.UsePermanentClothingIds);
+            prefix.IsEnabled = replace.IsEnabled;
+            folders.IsEnabled = extraYmt.IsEnabled = alternate.IsEnabled = dump.IsEnabled = !original && project.Items.Count > 0;
+            includeTattoos.IsEnabled = !original && project.Tattoos.Count > 0;
+            UpdateTattooOptions();
+            if (original) tattooDump.IsEnabled = illenium.IsEnabled = esx.IsEnabled = menyoo.IsEnabled = false;
+            UpdateBuildContents();
+        }
+        preserveOriginal.Checked += (_, _) => UpdateMode(); preserveOriginal.Unchecked += (_, _) => UpdateMode();
+        types.SelectionChanged += (_, _) => UpdateMode();
+        includeTattoos.Checked += (_, _) => UpdateBuildContents(); includeTattoos.Unchecked += (_, _) => UpdateBuildContents();
+        UpdateBuildContents(); panel.Children.Add(buildContents);
+        UpdateMode();
         var busy = false;
         Closing += (_, e) => { if (busy) e.Cancel = true; };
         var button = WorkflowUi.Button(panel, "Build", async (_, _) =>
@@ -290,6 +342,9 @@ public sealed class BuildProjectWindow : Window
             if (string.IsNullOrWhiteSpace(output.Text)) { progress.Text = "Select a Build output folder."; return; }
             if (!int.TryParse(order.Text, out var loadOrder) || loadOrder < 0) { progress.Text = "DLC load order must be a nonnegative integer."; return; }
             var snapshot = JsonSerializer.Deserialize<ClothProject>(JsonSerializer.Serialize(project))!;
+            var originalBuild = preserveOriginal.IsChecked == true && types.SelectedIndex == 2;
+            if (originalBuild && string.IsNullOrWhiteSpace(originalFolder.Text)) { progress.Text = "Select the original FiveM resource folder."; return; }
+            if (!originalBuild && includeTattoos.IsChecked != true) snapshot.Tattoos.Clear();
             snapshot.DlcName = name.Text.Trim(); snapshot.CreateDrawableSubfolders = folders.IsChecked == true;
             snapshot.CreateClothesInfoDump = dump.IsChecked == true;
             snapshot.DisableExtraAlternateVariationFeatures = alternate.IsChecked == true;
@@ -306,19 +361,43 @@ public sealed class BuildProjectWindow : Window
             snapshot.CreateMenyooTattooConfig = menyoo.IsChecked == true;
             var target = (types.SelectedItem as ListBoxItem)?.Content as string ?? "FiveM Resource";
             snapshot.BuildTarget = target;
-            var indexErrors = CollectionIndices.Validate(snapshot);
+            var indexErrors = originalBuild ? new List<string>() : CollectionIndices.Validate(snapshot);
             if (indexErrors.Count > 0) { new ErrorListWindow(indexErrors) { Owner = this }.ShowDialog(); return; }
-            var indexWarnings = CollectionIndices.Warnings(snapshot);
+            var indexWarnings = originalBuild ? new List<string>() : CollectionIndices.Warnings(snapshot);
             if (indexWarnings.Count > 0 && MessageBox.Show(this, string.Join("\n", indexWarnings) + "\nContinuar o build?", "Collection: capacidade", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             busy = true; panel.IsEnabled = false; progress.Text = $"Exportando {ProjectOperationSummary.Describe(snapshot)}...\nGerando stream, YMT e shop.meta...";
             buildBar.Visibility = Visibility.Visible; buildBar.IsIndeterminate = true;
             try
             {
                 var parent = Path.GetFullPath(output.Text);
+                if (originalBuild)
+                {
+                    var originalPath = originalFolder.Text;
+                    IProgress<string> copyProgress = new Progress<string>(message => progress.Text = message);
+                    OutputPath = await Task.Run(() => OriginalResourceExporter.Export(snapshot, resolve, originalPath, parent, copyProgress));
+                }
+                else
+                {
+                var gameFolder = GamePedAssets.FindGameFolder();
+                var dependencyErrors = await Task.Run(() => BuildDependencies.Prepare(snapshot, resolve, gameFolder));
+                if (dependencyErrors.Count > 0)
+                {
+                    busy = false; panel.IsEnabled = true; buildBar.Visibility = Visibility.Collapsed;
+                    progress.Text = $"Build needs attention: {dependencyErrors.Count} unresolved dependencies. Open the error list to review them.";
+                    new ErrorListWindow(dependencyErrors) { Owner = this }.ShowDialog();
+                    return;
+                }
                 OutputPath = await Task.Run(() => PlatformExporter.Export(snapshot, resolve, parent, target));
+                }
                 snapshot.OutputFolder = parent; Result = snapshot;
                 buildBar.IsIndeterminate = false; buildBar.Value = 100;
                 progress.Text = $"Exportação concluída: {ProjectOperationSummary.Describe(snapshot)}.\n\n" + OutputPath;
+                if (originalBuild)
+                {
+                    var unavailable = OriginalResourceExporter.Describe(snapshot).Entries.Count(entry => !entry.Available);
+                    progress.Text += "\n\nOriginal collections, indices and metadata were retained.";
+                    if (unavailable > 0) progress.Text += $"\n{unavailable} nonstandard source model names were copied but are not exposed as equippable IDs. Review ORIGINAL-LAYOUT.txt before mapping these entries.";
+                }
                 busy = false; panel.IsEnabled = true;
                 MessageBox.Show(this, progress.Text, "Build completed", MessageBoxButton.OK, MessageBoxImage.Information);
                 DialogResult = true;
@@ -367,11 +446,37 @@ public sealed class ErrorListWindow : Window
     {
         WorkflowUi.Theme(this, "Error List", 800, 450);
         var panel = WorkflowUi.Stack(); Content = panel;
-        var list = errors.ToArray();
-        panel.Children.Add(new TextBlock { Text = $"Errors: {list.Length}", Margin = new Thickness(0, 0, 0, 10) });
-        panel.Children.Add(new ListBox { ItemsSource = list.Length == 0 ? ["No errors found."] : list,
-            Height = 310, Background = WorkflowUi.Panel, Foreground = Brushes.White });
-        WorkflowUi.Button(panel, "Close", (_, _) => Close());
+        var list = errors.Select(message => message.StartsWith("Aviso:", StringComparison.OrdinalIgnoreCase) && message.Contains("drawables", StringComparison.OrdinalIgnoreCase)
+            ? "Warning: Rebuilt addon target (not original resource layout): " + message[6..].TrimStart()
+            : message).ToArray();
+        static string Kind(string message) => message.StartsWith("Aviso:", StringComparison.OrdinalIgnoreCase) ||
+            message.StartsWith("Warning:", StringComparison.OrdinalIgnoreCase) ? "Warnings" :
+            message.StartsWith("Pending:", StringComparison.OrdinalIgnoreCase) ? "Pending" : "Errors";
+        var summary = $"Errors: {list.Count(message => Kind(message) == "Errors")}   |   " +
+            $"Warnings: {list.Count(message => Kind(message) == "Warnings")}   |   Pending: {list.Count(message => Kind(message) == "Pending")}";
+        panel.Children.Add(new TextBlock { Text = summary, Margin = new Thickness(0, 0, 0, 10) });
+        var filter = new ComboBox { ItemsSource = new[] { "All issues", "Errors", "Warnings", "Pending" }, SelectedIndex = 0,
+            Width = 170, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
+        panel.Children.Add(filter);
+        var rows = new ListBox { Height = 280, Background = WorkflowUi.Panel, Foreground = Brushes.White };
+        panel.Children.Add(rows);
+        void Refresh()
+        {
+            var selection = filter.SelectedItem as string;
+            var matching = list.Where(message => selection == "All issues" || Kind(message) == selection).ToArray();
+            rows.ItemsSource = matching.Length == 0 ? ["No issues in this category."] : matching;
+        }
+        filter.SelectionChanged += (_, _) => Refresh(); Refresh();
+        var buttons = new WrapPanel(); panel.Children.Add(buttons);
+        WorkflowUi.Button(buttons, "Copy report", (_, _) => Clipboard.SetText(summary + "\n\n" + string.Join("\n", list)));
+        WorkflowUi.Button(buttons, "Save report", (_, _) =>
+        {
+            var dialog = new SaveFileDialog { Filter = "Text report (*.txt)|*.txt", FileName = "validation-report.txt" };
+            if (dialog.ShowDialog(this) == true)
+                try { File.WriteAllText(dialog.FileName, summary + "\n\n" + string.Join("\n", list)); }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not save report"); }
+        });
+        WorkflowUi.Button(buttons, "Close", (_, _) => Close());
     }
 }
 

@@ -41,7 +41,7 @@ public static class CatalogMerger
                 foreach (var texture in candidate.TexturePaths) validateYtd(texture);
                 var group = project.Items.Concat(newPieces).Where(item => item.Gender == candidate.Gender && item.Category == candidate.Category).ToArray();
                 candidate.ExportPosition = group.Length == 0 ? 0 : checked(group.Max(item => item.ExportPosition ?? item.SourceIndex ?? 0) + 1);
-                if (project.ReplaceDummiesOnAdding && project.PublishedCollection is null)
+                if (project.ReplaceDummiesOnAdding && (project.PublishedCollection is null || project.UsePermanentClothingIds))
                 {
                     var dummy = project.Items.Where(item => item.IsDummy && item.Gender == candidate.Gender && item.Category == candidate.Category && !replaced.Contains(item))
                         .OrderBy(item => item.ExportPosition ?? item.SourceIndex).FirstOrDefault();
@@ -97,6 +97,7 @@ public static class CatalogMerger
     }
     private static void ApplyTextures(ClothItem target, IEnumerable<string> textures, bool replaceDummies)
     {
+        ClothingIdentityMap.EnsureTextures(target);
         while (target.OriginalTextureFileNames.Count < target.TexturePaths.Count)
                 target.OriginalTextureFileNames.Add(Path.GetFileName(
                     target.TexturePaths[target.OriginalTextureFileNames.Count]));
@@ -110,6 +111,7 @@ public static class CatalogMerger
                     continue;
                 }
                 target.TexturePaths.Add(texture);
+                target.TextureIds.Add(Guid.NewGuid());
                 target.OriginalTextureFileNames.Add(Path.GetFileName(texture));
             }
     }

@@ -53,6 +53,7 @@ public partial class MainWindow
         ContextEntry(menu, "Export Textures as PNG", () => ExportAssetAnalysis(item.ModelPath, "PNG"), !item.IsDummy);
         menu.Items.Add(new Separator());
         ContextEntry(menu, "Copy Name", () => Clipboard.SetText(item.Name));
+        ContextEntry(menu, "Copy Permanent ID", () => Clipboard.SetText(item.Id.ToString("D")));
         ContextEntry(menu, "Copy Game Name", () => Clipboard.SetText(Path.GetFileNameWithoutExtension(item.OriginalModelFileName ?? item.ModelPath)), !item.IsDummy);
         ContextEntry(menu, "Copy File Path", () => Clipboard.SetText(AbsoluteAssetPath(item.ModelPath)), !item.IsDummy);
         ContextEntry(menu, "Rename", RenameSelectedItem);
@@ -62,7 +63,9 @@ public partial class MainWindow
     {
         if (ItemList.SelectedItem is not ClothItem item || TextureList.SelectedIndex < 0) { e.Handled = true; return; }
         var index = TextureList.SelectedIndex; var path = item.TexturePaths[index];
+        ClothingIdentityMap.EnsureTextures(item);
         var menu = TextureList.ContextMenu; menu.Items.Clear();
+        ContextEntry(menu, "Copy Permanent Texture ID", () => Clipboard.SetText(item.TextureIds[index].ToString("D")));
         ContextEntry(menu, "Remove", () => RemoveTexture_Click(sender, new RoutedEventArgs()));
         ContextEntry(menu, "Rename", RenameSelectedTexture);
         ContextEntry(menu, "Replace", () => ReplaceTexture_Click(sender, new RoutedEventArgs()));

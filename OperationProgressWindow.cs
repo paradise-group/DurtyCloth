@@ -13,6 +13,8 @@ public sealed class OperationProgressWindow : Window
     {
         _total = total;
         WorkflowUi.Theme(this, title, 440, 160);
+        MinHeight = 0;
+        SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var panel = WorkflowUi.Stack(); Content = panel;
@@ -25,7 +27,9 @@ public sealed class OperationProgressWindow : Window
     public void Report(int done, string name)
     {
         if (_complete) return;
-        _label.Text = $"Salvando peças: {done}/{_total}\n{name}";
+        _label.Text = _total > 0
+            ? $"Saving items: {done}/{_total} ({100.0 * Math.Clamp(done, 0, _total) / _total:0}%)\n{name}"
+            : name;
         _bar.Value = done; _bar.IsIndeterminate = _total == 0;
     }
     public void Complete() { _complete = true; Close(); }

@@ -51,7 +51,7 @@ public static partial class ClothCatalog
         return int.TryParse(match.Groups["index"].Value, out var index) ? (category, index) : ("Outros", null);
     }
 
-    public static List<ClothItem> Import(IEnumerable<string> paths)
+    public static List<ClothItem> Import(IEnumerable<string> paths, Action<int, int>? progress = null)
     {
         var files = paths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var models = files.Where(path => Path.GetExtension(path).Equals(".ydd", StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -108,6 +108,7 @@ public static partial class ClothCatalog
                     throw new InvalidDataException($"Missing alternate _{alternate + 1} for {modelStem}. Import consecutive alternate models together to preserve their GTA indices.");
             result.Add(new ClothItem
             {
+                Id = ClothingIdentityMap.SourceId(model, ResolveGender(model)),
                 Name = modelStem,
                 Gender = ResolveGender(model),
                 Category = category,
@@ -119,6 +120,8 @@ public static partial class ClothCatalog
                 OriginalTextureFileNames = matchingTextures.Select(Path.GetFileName).ToList()!,
                 PhysicsPath = matchingPhysics
             });
+            ClothingIdentityMap.EnsureTextures(result[^1]);
+            progress?.Invoke(result.Count, mainModels.Length);
         }
         return result;
     }

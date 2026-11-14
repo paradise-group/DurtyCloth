@@ -140,13 +140,23 @@ public static class ModelPreview
         return new ModelPreviewData(parts.ToArray(), sourceTriangles, previewTriangles);
     }
 
-    public static Matrix3D HeadAttachment(string headModelPath)
+    public static int? PropBoneTag(string slot) => slot switch
+    {
+        "p_head" or "p_eyes" or "p_ears" or "p_mouth" => 31086,
+        "p_lwrist" => 61007,
+        "p_rwrist" => 43810,
+        _ => null
+    };
+
+    public static Matrix3D HeadAttachment(string headModelPath) => BoneAttachment(headModelPath, 31086);
+
+    public static Matrix3D BoneAttachment(string headModelPath, int boneTag)
     {
         var ydd = new YddFile();
         ydd.Load(File.ReadAllBytes(headModelPath));
         var bone = ydd.Drawables?.SelectMany(d => d.Skeleton?.Bones?.Items ?? [])
-            .FirstOrDefault(b => b.Tag == 31086)
-            ?? throw new InvalidDataException("Base ped has no SKEL_Head attachment.");
+            .FirstOrDefault(b => b.Tag == boneTag)
+            ?? throw new InvalidDataException("Base ped has no attachment bone " + boneTag + ".");
         var matrix = SharpDX.Matrix.AffineTransformation(1, bone.Rotation, bone.Translation);
         for (var parent = bone.Parent; parent is not null; parent = parent.Parent)
             matrix *= SharpDX.Matrix.AffineTransformation(1, parent.Rotation, parent.Translation);
@@ -161,6 +171,9 @@ public static class ModelPreview
     }
 
     public static ModelPreviewData AttachToHead(ModelPreviewData data, Matrix3D attachment) =>
+        AttachToBone(data, attachment);
+
+    public static ModelPreviewData AttachToBone(ModelPreviewData data, Matrix3D attachment) =>
         data with { Parts = data.Parts.Select(p => p with {
             Positions = p.Positions.Select(attachment.Transform).ToArray()
         }).ToArray() };

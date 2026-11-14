@@ -11,6 +11,7 @@ public static class ProjectBundle
 
     public static void Export(ClothProject source, Func<string, string> resolvePath, string output)
     {
+        ClothingIdentityMap.GenerateMissing(source);
         if (File.Exists(output)) throw new IOException("O pacote já existe: " + output);
         var project = JsonSerializer.Deserialize<ClothProject>(JsonSerializer.Serialize(source))!;
         var assets = new List<(string Source, string Entry)>();
@@ -39,6 +40,8 @@ public static class ProjectBundle
         }
         foreach (var tattoo in project.Tattoos)
             tattoo.ImagePath = Add(tattoo.ImagePath, "assets/" + tattoo.Id.ToString("N") + "/tattoo" + Path.GetExtension(tattoo.ImagePath));
+        foreach (var appearance in project.AppearanceAssets)
+            appearance.TexturePath = Add(appearance.TexturePath, "assets/" + appearance.Id.ToString("N") + "/appearance.ytd");
         if (assets.Select(x => x.Entry).Distinct(StringComparer.OrdinalIgnoreCase).Count() != assets.Count)
             throw new InvalidDataException("Peças com identificadores duplicados no projeto.");
 
@@ -72,6 +75,7 @@ public static class ProjectBundle
         var paths = project.Items.SelectMany(item => new[] { item.ModelPath, item.PhysicsPath }
                 .Concat(item.AlternateModelPaths).Concat(item.TexturePaths))
             .Concat(project.Tattoos.Select(tattoo => tattoo.ImagePath))
+            .Concat(project.AppearanceAssets.Select(appearance => appearance.TexturePath))
             .Append(project.SourceAlternateVariationsPath).Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(path => path!.Replace('\\', '/')).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         foreach (var path in paths)

@@ -104,7 +104,7 @@ public partial class MainWindow : Window
     private ModelPreviewData? _displayModelData;
     private Dictionary<string, BitmapSource> _pedTextures = new(StringComparer.OrdinalIgnoreCase);
     private string? _pedGender;
-    private readonly Dictionary<string, Matrix3D> _headAttachments = new();
+    private readonly Dictionary<(string Gender, int Tag), Matrix3D> _boneAttachments = new();
     private int _pedRequest;
     private bool _showBasePed = true;
     private readonly Dictionary<string, Task<(ModelPreviewPart[], Dictionary<string, BitmapSource>)>> _pedLoads = new();
@@ -359,7 +359,7 @@ public partial class MainWindow : Window
         { Status("Heel Height must be between 0 and 1."); return; }
         if (position != (item.ExportPosition ?? item.SourceIndex ?? 0))
         {
-            if (_project.PublishedCollection is not null)
+            if (_project.PublishedCollection is not null && !_project.UsePermanentClothingIds)
             { PositionBox.Text = (item.ExportPosition ?? item.SourceIndex ?? 0).ToString(); Status("Collection publicada: reordenação bloqueada; adicione peças no final."); return; }
             var group = _project.Items.Where(candidate => candidate.Gender == item.Gender && candidate.Category == item.Category)
                 .OrderBy(candidate => candidate.ExportPosition ?? candidate.SourceIndex).ThenBy(candidate => candidate.Name).ToList();
@@ -384,6 +384,19 @@ public partial class MainWindow : Window
             "Help", MessageBoxButton.OK, MessageBoxImage.Information);
 
     private readonly Dictionary<string, bool> _categoryExpanded = new();
+    private void ExpandAllCategories_Click(object sender, RoutedEventArgs e) => SetAllCategoriesExpanded(true);
+    private void CollapseAllCategories_Click(object sender, RoutedEventArgs e) => SetAllCategoriesExpanded(false);
+    private void SetAllCategoriesExpanded(bool expanded)
+    {
+        foreach (var category in _project.Items.Select(item => item.Category).Distinct())
+            _categoryExpanded[category] = expanded;
+        void Visit(DependencyObject node)
+        {
+            if (node is Expander { DataContext: CollectionViewGroup } expander) expander.IsExpanded = expanded;
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) Visit(VisualTreeHelper.GetChild(node, i));
+        }
+        ItemList.UpdateLayout(); Visit(ItemList);
+    }
     private void Category_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is Expander expander && expander.DataContext is CollectionViewGroup group && group.Name is string category && _categoryExpanded.TryGetValue(category, out var open)) expander.IsExpanded = open;
@@ -405,6 +418,7 @@ public partial class MainWindow : Window
     private void RefreshItems()
     {
         if (ItemList is null || CategoryList is null || SearchBox is null) return;
+        foreach (var item in _project.Items) ClothingIdentityMap.EnsureTextures(item);
         var selected = ItemList.SelectedItem as ClothItem;
         var selectedTexture = TextureList.SelectedIndex;
         var category = CategoryList.SelectedItem as string;
@@ -447,7 +461,8 @@ public partial class MainWindow : Window
             ItemList.SelectedItem = selected;
             if (selectedTexture >= 0 && selectedTexture < TextureList.Items.Count) TextureList.SelectedIndex = selectedTexture;
         }
-        CountText.Text = filtered.Length + " / " + _project.Items.Count + " drawables • " + _project.Tattoos.Count + " tattoos";
+        CountText.Text = filtered.Length + " / " + _project.Items.Count + " drawables • " +
+            _project.Tattoos.Count + " tattoos • " + _project.AppearanceAssets.Count + " appearance textures";
         ProjectText.Text = _project.Name + (_dirty ? " *" : "") +
             (_projectPath is null ? "  •  projeto não salvo" : "  •  " + _projectPath);
         if (_duplicateReviewNeeded || DuplicateReview.IsExpanded)
@@ -484,18 +499,31 @@ public partial class MainWindow : Window
             Title = "Abrir projeto"
         };
         if (dialog.ShowDialog() != true) return;
-        try { LoadProject(dialog.FileName); }
+        try
+        {
+            var project = RunWithLoading("A abrir projeto", "A ler o projeto...", progress =>
+            {
+                var loaded = Path.GetExtension(dialog.FileName).Equals(".dctproj", StringComparison.OrdinalIgnoreCase)
+                    ? DctProjectImporter.Import(dialog.FileName)
+                    : JsonSerializer.Deserialize<ClothProject>(File.ReadAllText(dialog.FileName));
+                if (loaded is null || loaded.FormatVersion != 1)
+                    throw new InvalidDataException("Versão de projeto não suportada.");
+                progress.Report((1, 1, "A preparar a lista de peças..."));
+                return loaded;
+            });
+            LoadProject(dialog.FileName, project);
+        }
         catch (Exception ex)
         {
             MessageBox.Show(ex.Message, "Não foi possível abrir", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private void LoadProject(string path)
+    private void LoadProject(string path, ClothProject? loaded = null)
     {
         if (Path.GetExtension(path).Equals(".dctproj", StringComparison.OrdinalIgnoreCase))
         {
-            _project = DctProjectImporter.Import(path);
+            _project = loaded ?? DctProjectImporter.Import(path);
             _resource = null;
             _projectPath = null;
             _dirty = true;
@@ -506,7 +534,7 @@ public partial class MainWindow : Window
                 " peças. Salve para criar um .fcsproj independente.");
             return;
         }
-        var project = JsonSerializer.Deserialize<ClothProject>(File.ReadAllText(path));
+        var project = loaded ?? JsonSerializer.Deserialize<ClothProject>(File.ReadAllText(path));
         if (project is null || project.FormatVersion != 1)
             throw new InvalidDataException("Versão de projeto não suportada.");
         _project = project;
@@ -559,6 +587,8 @@ public partial class MainWindow : Window
                         staged.SourceAlternateVariationsPath, Guid.Empty, assetsRoot, projectRoot);
                 foreach (var tattoo in staged.Tattoos)
                     tattoo.ImagePath = StoreAsset(tattoo.ImagePath, tattoo.Id, assetsRoot, projectRoot);
+                foreach (var appearance in staged.AppearanceAssets)
+                    appearance.TexturePath = StoreAsset(appearance.TexturePath, appearance.Id, assetsRoot, projectRoot);
                 foreach (var item in staged.Items)
                 {
                     if (!item.IsDummy) item.ModelPath = StoreAsset(item.ModelPath, item.Id, assetsRoot, projectRoot);
@@ -635,7 +665,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true) ImportFiles(dialog.FileNames);
     }
 
-    private async void ImportBundle_Click(object sender, RoutedEventArgs e)
+    private void ImportBundle_Click(object sender, RoutedEventArgs e)
     {
         if (!ConfirmDiscard()) return;
         var fileDialog = new OpenFileDialog
@@ -648,9 +678,13 @@ public partial class MainWindow : Window
         if (folderDialog.ShowDialog() != true) return;
         try
         {
-            IsEnabled = false;
-            Status("Importando pacote e verificando arquivos...");
-            var path = await Task.Run(() => ProjectBundle.Import(fileDialog.FileName, folderDialog.FolderName));
+            var path = RunWithLoading("A importar pacote", "A extrair e verificar os ficheiros...",
+                progress =>
+                {
+                    var path = ProjectBundle.Import(fileDialog.FileName, folderDialog.FolderName);
+                    progress.Report((1, 1, "A abrir o projeto..."));
+                    return path;
+                });
             LoadProject(path);
             Status("Pacote importado: " + path);
         }
@@ -659,12 +693,11 @@ public partial class MainWindow : Window
             MessageBox.Show(ex.Message, "Não foi possível importar o pacote",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { IsEnabled = true; }
     }
 
     private async void ExportBundle_Click(object sender, RoutedEventArgs e)
     {
-        if (_project.Items.Count == 0 && _project.Tattoos.Count == 0) { Status("Add clothes or tattoos before exporting the project."); return; }
+        if (_project.Items.Count == 0 && _project.Tattoos.Count == 0 && _project.AppearanceAssets.Count == 0) { Status("Add clothes or tattoos before exporting the project."); return; }
         var dialog = new SaveFileDialog
         {
             Filter = "Pacote Paradise Cloth Studio (*.fcsbundle)|*.fcsbundle",
@@ -766,7 +799,16 @@ public partial class MainWindow : Window
             var root = Path.GetDirectoryName(path)!;
             foreach (var item in imported.Items)
             {
-                item.Id = Guid.NewGuid();
+                if (gender is not null && item.Gender != gender)
+                {
+                    item.Id = Guid.NewGuid();
+                    item.TextureIds = item.TexturePaths.Select(_ => Guid.NewGuid()).ToList();
+                }
+                if (_project.Items.Any(existing => existing.Id == item.Id))
+                    throw new InvalidDataException("Esta peça já existe no projeto com o mesmo ID permanente: " + item.Name);
+            }
+            foreach (var item in imported.Items)
+            {
                 if (gender is not null) item.Gender = gender;
                 item.ModelPath = item.IsDummy ? "" : Path.Combine(root, item.ModelPath);
                 item.AlternateModelPaths = item.AlternateModelPaths.Select(value => Path.Combine(root, value)).ToList();
@@ -795,22 +837,49 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
         try
         {
-            var resource = FiveMResource.Open(dialog.FolderName);
-            var clothes = Directory.EnumerateFiles(Path.Combine(resource.Root, "stream"), "*",
-                SearchOption.AllDirectories).Where(path =>
-                new[] { ".ydd", ".ytd", ".yld" }.Contains(Path.GetExtension(path),
-                    StringComparer.OrdinalIgnoreCase));
-            _project = new ClothProject
-            {
-                Name = Path.GetFileName(resource.Root),
-                Items = ClothCatalog.Import(clothes)
-            };
+            var (resource, project) = RunWithLoading("A abrir recurso FiveM", "A verificar os ficheiros...",
+                progress =>
+                {
+                    var resource = FiveMResource.Open(dialog.FolderName);
+                    progress.Report((5, 100, "A identificar roupas e acessórios..."));
+                    var clothes = Directory.EnumerateFiles(Path.Combine(resource.Root, "stream"), "*",
+                        SearchOption.AllDirectories).Where(path =>
+                        new[] { ".ydd", ".ytd", ".yld" }.Contains(Path.GetExtension(path),
+                            StringComparer.OrdinalIgnoreCase));
+                    var lastPercent = -1;
+                    var items = ClothCatalog.Import(clothes, (done, total) =>
+                    {
+                        var percent = 5 + done * 75 / Math.Max(1, total);
+                        if (percent == lastPercent) return;
+                        lastPercent = percent;
+                        progress.Report((percent, 100, $"A identificar roupas e acessórios: {done}/{total}"));
+                    });
+                    ClothingIdentityMap.Restore(resource.Root, items);
+                    progress.Report((80, 100, "A importar tatuagens..."));
+                    var hasTattooAssets = Directory.EnumerateFiles(resource.Root, "*.ytd", SearchOption.AllDirectories).Any(TattooImporter.LooksLikeTattooYtd) ||
+                        Directory.EnumerateFiles(resource.Root, "*_overlays.xml", SearchOption.AllDirectories).Any();
+                    var tattoos = hasTattooAssets ? TattooImporter.Import(resource.Root) : [];
+                    progress.Report((90, 100, "A importar olhos, pelos e maquilhagem..."));
+                    var appearanceAssets = AppearanceImporter.Import(resource.Root);
+                    return (resource, new ClothProject
+                    {
+                        Name = Path.GetFileName(resource.Root),
+                        SourceResourceRoot = resource.Root,
+                        Items = items,
+                        Tattoos = tattoos,
+                        AppearanceAssets = appearanceAssets
+                    });
+                });
+            _project = project;
             _resource = resource;
             _projectPath = null;
             _dirty = false;
             RefreshItems();
             ShowDetails(null);
-            Status($"Recurso aberto: {_project.Items.Count} peças, {resource.FileCount} arquivos. Copiar recurso preserva os arquivos originais.");
+            Status($"Recurso aberto: {_project.Items.Count} peças, {_project.Tattoos.Count} tatuagens/texturas de tatuagem, " +
+                $"{_project.AppearanceAssets.Count} texturas de aparência, {resource.FileCount} arquivos. " +
+                (_project.Tattoos.Any(t => string.IsNullOrEmpty(t.Zone)) ? "Algumas tatuagens precisam de zona em Options > Add tattoo / Edit tattoos. " : "") +
+                "Copiar recurso preserva os arquivos originais.");
         }
         catch (Exception ex)
         {
@@ -851,10 +920,16 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
         try
         {
-            var files = Directory.EnumerateFiles(dialog.FolderName, "*", SearchOption.AllDirectories)
-                .Where(path => new[] { ".ydd", ".ytd", ".yld" }.Contains(Path.GetExtension(path),
-                    StringComparer.OrdinalIgnoreCase));
-            ImportFiles(files);
+            var (files, imported) = RunWithLoading("A importar pasta", "A procurar ficheiros de roupa...",
+                progress =>
+                {
+                    var files = Directory.EnumerateFiles(dialog.FolderName, "*", SearchOption.AllDirectories)
+                        .Where(path => new[] { ".ydd", ".ytd", ".yld" }.Contains(Path.GetExtension(path),
+                            StringComparer.OrdinalIgnoreCase)).ToArray();
+                    progress.Report((1, 2, $"A classificar {files.Length} ficheiros..."));
+                    return (files, ClothCatalog.Import(files));
+                });
+            ImportFiles(files, imported);
         }
         catch (Exception ex)
         {
@@ -888,7 +963,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not import dropped files", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
-    private void ImportFiles(IEnumerable<string> paths)
+    private void ImportFiles(IEnumerable<string> paths, List<ClothItem>? prepared = null)
     {
         var selected = paths.ToArray();
         if (!selected.Any(path => Path.GetExtension(path).Equals(".ydd", StringComparison.OrdinalIgnoreCase)))
@@ -923,7 +998,13 @@ public partial class MainWindow : Window
         {
             Status($"Importing {selected.Length} clothing file(s)...");
             Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-            var imported = ClothCatalog.Import(ClothCatalog.WithSiblingCompanions(selected));
+            var imported = prepared ?? RunWithLoading("A importar ficheiros", "A localizar modelos e texturas...",
+                progress =>
+                {
+                    var files = ClothCatalog.WithSiblingCompanions(selected);
+                    progress.Report((1, 2, $"A classificar {files.Length} ficheiros..."));
+                    return ClothCatalog.Import(files);
+                });
             var before = _project.Items.Select(item => item.Id).ToHashSet();
             // Models are read lazily for the selected drawable; importing a folder does not decode every YDD.
             var changes = CatalogMerger.Merge(_project, imported, AbsoluteAssetPath, CheckYtd, ReviewTextureImports);
@@ -963,6 +1044,10 @@ public partial class MainWindow : Window
         _currentModelData = null;
         _displayModelData = null;
         _updatingDetails = true;
+        var identity = item is null ? null : CollectionIndices.Current(_project).FirstOrDefault(entry => entry.ItemId == item.Id);
+        ClothingIdentitySummary.Text = identity is null ? "" :
+            $"Original model namespace: {Path.GetFileNameWithoutExtension(item!.OriginalModelFileName ?? item.ModelPath).Split('^')[0]} / source index {item.SourceIndex}\n" +
+            $"If rebuilding as a new addon: {identity.Collection} / slot {identity.Slot} / index {identity.LocalIndex}. Original-resource mode keeps the source addresses.";
         EditorPanel.IsEnabled = item is not null;
         EditorScroll.Visibility = item is null ? Visibility.Collapsed : Visibility.Visible;
         EmptyEditorText.Visibility = item is null ? Visibility.Visible : Visibility.Collapsed;
@@ -1118,7 +1203,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static Dictionary<string, BitmapSource> ReadMatchingTextures(string path, ModelPreviewData data)
+    internal static Dictionary<string, BitmapSource> ReadMatchingTextures(string path, ModelPreviewData data)
     {
         var result = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
         var ytd = new YtdFile();
@@ -1144,17 +1229,18 @@ public partial class MainWindow : Window
     {
         if (_showBasePed && ItemList.SelectedItem is ClothItem selected && _pedGender == selected.Gender)
         {
-            if (selected.Category.EndsWith("[p_head]", StringComparison.Ordinal))
+            var slot = selected.Category.Split('[').Last().TrimEnd(']');
+            if (ModelPreview.PropBoneTag(slot) is int boneTag)
             {
-                if (!_headAttachments.TryGetValue(selected.Gender, out var attachment))
+                var key = (selected.Gender, boneTag);
+                if (!_boneAttachments.TryGetValue(key, out var attachment))
                 {
                     var head = GamePedAssets.Load(GamePedAssets.FindGameFolder()!, selected.Gender).First(a => a.Slot == "head");
-                    attachment = ModelPreview.HeadAttachment(head.ModelPath);
-                    _headAttachments[selected.Gender] = attachment;
+                    attachment = ModelPreview.BoneAttachment(head.ModelPath, boneTag);
+                    _boneAttachments[key] = attachment;
                 }
-                data = ModelPreview.AttachToHead(data, attachment);
+                data = ModelPreview.AttachToBone(data, attachment);
             }
-            var slot = selected.Category.Split('[').Last().TrimEnd(']');
             var body = _pedParts.Where(p => !p.TextureName!.StartsWith("__ped_" + slot + "_", StringComparison.Ordinal)).ToArray();
             var bodyTriangles = body.Sum(p => p.Indices.Length / 3);
             data = data with { Parts = data.Parts.Concat(body).ToArray(), SourceTriangles = data.SourceTriangles + bodyTriangles, PreviewTriangles = data.PreviewTriangles + bodyTriangles };
@@ -1598,7 +1684,7 @@ public partial class MainWindow : Window
             texture.Width, texture.Height);
     }
 
-    private static BitmapSource DecodeTextureBitmap(Texture texture, int maxDimension)
+    internal static BitmapSource DecodeTextureBitmap(Texture texture, int maxDimension)
     {
         var mip = 0;
         while (maxDimension > 0 && Math.Max(texture.Width >> mip, texture.Height >> mip) > maxDimension &&
@@ -1674,6 +1760,7 @@ public partial class MainWindow : Window
 
     private static void AlignTextureNames(ClothItem item)
     {
+        ClothingIdentityMap.EnsureTextures(item);
         while (item.TextureLabels.Count < item.TexturePaths.Count) item.TextureLabels.Add("");
         if (item.TextureLabels.Count > item.TexturePaths.Count) item.TextureLabels.RemoveRange(item.TexturePaths.Count, item.TextureLabels.Count - item.TexturePaths.Count);
         while (item.TextureEffects.Count < item.TexturePaths.Count) item.TextureEffects.Add(new TextureEffect());
@@ -1949,7 +2036,7 @@ public partial class MainWindow : Window
         AlignTextureNames(item);
         if (_project.ReplaceWithDummyOnRemove && !string.IsNullOrWhiteSpace(item.TexturePaths[index]))
         { item.TexturePaths[index] = ""; item.OriginalTextureFileNames[index] = "(dummy)"; item.TextureEffects[index] = new TextureEffect(); item.TextureLabels[index] = ""; }
-        else { item.TexturePaths.RemoveAt(index); item.OriginalTextureFileNames.RemoveAt(index); item.TextureEffects.RemoveAt(index); item.TextureLabels.RemoveAt(index); }
+        else { item.TexturePaths.RemoveAt(index); item.TextureIds.RemoveAt(index); item.OriginalTextureFileNames.RemoveAt(index); item.TextureEffects.RemoveAt(index); item.TextureLabels.RemoveAt(index); }
         _dirty = true;
         RefreshTextureList(item, index);
         RefreshItems();
@@ -1968,6 +2055,7 @@ public partial class MainWindow : Window
         AlignTextureNames(item);
         (item.TexturePaths[index], item.TexturePaths[target]) =
             (item.TexturePaths[target], item.TexturePaths[index]);
+        (item.TextureIds[index], item.TextureIds[target]) = (item.TextureIds[target], item.TextureIds[index]);
         (item.TextureLabels[index], item.TextureLabels[target]) = (item.TextureLabels[target], item.TextureLabels[index]);
         (item.OriginalTextureFileNames[index], item.OriginalTextureFileNames[target]) =
             (item.OriginalTextureFileNames[target], item.OriginalTextureFileNames[index]);
@@ -1990,7 +2078,7 @@ public partial class MainWindow : Window
                 {
                     var absolute = Path.GetFullPath(asset.Source);
                     if (outputNames.TryGetValue(asset.Name, out var previous) &&
-                        !string.Equals(previous, absolute, StringComparison.OrdinalIgnoreCase))
+                        !AssetContent.Equivalent(previous, absolute))
                         errors.Add("Nome duplicado no stream: " + asset.Name);
                     else
                         outputNames[asset.Name] = absolute;
@@ -2001,6 +2089,11 @@ public partial class MainWindow : Window
         }
         foreach (var tattoo in _project.Tattoos)
         {
+            if (string.IsNullOrWhiteSpace(tattoo.Zone))
+            {
+                errors.Add("Pending: Tattoo " + tattoo.Name + ": body zone is not configured. Kept in the project; only blocks builds that include tattoos.");
+                continue;
+            }
             try { TattooExporter.Validate(tattoo); TattooExporter.ReadImage(tattoo, AbsoluteAssetPath(tattoo.ImagePath)); }
             catch (Exception ex) { errors.Add(tattoo.Name + ": " + ex.Message); }
         }
@@ -2027,7 +2120,9 @@ public partial class MainWindow : Window
             if (undefined > 0) message += Environment.NewLine + undefined + " peças com gênero indefinido.";
             if (undefined > 0) errors.Add(undefined + " drawable(s) with undefined gender.");
             new ErrorListWindow(errors) { Owner = this }.ShowDialog();
-            Status(errors.Count == 0 ? "Arquivos validados." : errors.Count + " erro(s) encontrado(s).");
+            var warnings = errors.Count(message => message.StartsWith("Aviso:") || message.StartsWith("Warning:"));
+            var pending = errors.Count(message => message.StartsWith("Pending:"));
+            Status($"Validation: {errors.Count - warnings - pending} errors, {warnings} warnings, {pending} pending items.");
         }
         catch (Exception ex)
         {
@@ -2062,10 +2157,11 @@ public partial class MainWindow : Window
     private async void ExportAddon_Click(object sender, RoutedEventArgs e)
     {
         Keyboard.ClearFocus();
-        var dialog = new BuildProjectWindow(_project, AbsoluteAssetPath) { Owner = this };
+        var dialog = new BuildProjectWindow(_project, AbsoluteAssetPath, _resource?.Root ?? _project.SourceResourceRoot) { Owner = this };
         if (dialog.ShowDialog() == true && dialog.Result is ClothProject result)
         {
             _project.DlcName = result.DlcName; _project.OutputFolder = result.OutputFolder;
+            _project.SourceResourceRoot = result.SourceResourceRoot;
             _project.BuildTarget = result.BuildTarget;
             _project.CreateDrawableSubfolders = result.CreateDrawableSubfolders;
             _project.CreateClothesInfoDump = result.CreateClothesInfoDump;
