@@ -16,6 +16,7 @@
     <Compile Include="../../FirstPersonMetadata.cs" Link="FirstPersonMetadata.cs" />
     <Compile Include="../../YldInspector.cs" Link="YldInspector.cs" />
     <Compile Include="../../ClothProject.cs" Link="ClothProject.cs" />
+    <Compile Include="../../CollectionIndices.cs" Link="CollectionIndices.cs" />
     <Reference Include="CodeWalker.Core">
       <HintPath>$(CodeWalkerDir)\CodeWalker.Core.dll</HintPath>
     </Reference>

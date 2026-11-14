@@ -144,6 +144,7 @@ public sealed class ProjectSettingsWindow : Window
         var dlc = WorkflowUi.Field(general, "DLC Name *", string.IsNullOrWhiteSpace(project.DlcName)
             ? new string(project.Name.ToLowerInvariant().Where(char.IsAsciiLetterOrDigit).Take(14).ToArray()) : project.DlcName);
         var autoDlc = dlc.Text;
+        if (project.PublishedCollection is not null) { projectName.IsReadOnly = true; dlc.IsReadOnly = true; }
         RegisterName("DlcNameField", dlc);
         projectName.TextChanged += (_, _) =>
         {
@@ -161,6 +162,11 @@ public sealed class ProjectSettingsWindow : Window
         var duplicates = WorkflowUi.Check(general, "Always import duplicates without confirmation", project.AlwaysImportDuplicates);
         var dummyRemove = WorkflowUi.Check(general, "Automatically replace with dummies on remove", project.ReplaceWithDummyOnRemove);
         var dummyAdd = WorkflowUi.Check(general, "Automatically replace dummies when adding clothes", project.ReplaceDummiesOnAdding);
+        if (project.PublishedCollection is not null) dummyAdd.IsEnabled = false;
+        var published = WorkflowUi.Check(general, "Collection publicada: proteger índices (irreversível neste projeto)", project.PublishedCollection is not null);
+        published.IsEnabled = project.PublishedCollection is null;
+        var updatePublished = WorkflowUi.Check(general, "Registrar também as novas peças como publicadas", false);
+        updatePublished.Visibility = project.PublishedCollection is null ? Visibility.Collapsed : Visibility.Visible;
         var folders = WorkflowUi.Check(general, "Create sub folders for cloth drawable types", project.CreateDrawableSubfolders);
         var dump = WorkflowUi.Check(general, "Create clothes info dump", project.CreateClothesInfoDump);
         var modelLimit = WorkflowUi.Field(general, "Model size warning (MiB)", project.ModelWarningMiB.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -184,6 +190,18 @@ public sealed class ProjectSettingsWindow : Window
             Result.ReplaceDummiesOnAdding = dummyAdd.IsChecked == true;
             Result.CreateDrawableSubfolders = folders.IsChecked == true;
             Result.CreateClothesInfoDump = dump.IsChecked == true;
+            try
+            {
+                CollectionIndices.EnsureValid(Result);
+                if ((published.IsChecked == true && project.PublishedCollection is null) || updatePublished.IsChecked == true)
+                {
+                    if (MessageBox.Show(this, "Confirma que estes índices e o DLC name correspondem à collection publicada no servidor? Eles serão protegidos; novas peças devem entrar no final e remoções devem usar Replace with Dummy.",
+                        "Publicar collection", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+                    CollectionIndices.Publish(Result);
+                    Result.ReplaceDummiesOnAdding = false;
+                }
+            }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Collection publicada"); return; }
             DialogResult = true;
         });
         RegisterName("ApplyProjectSettings", apply);
@@ -239,6 +257,11 @@ public sealed class BuildProjectWindow : Window
         var name = WorkflowUi.Field(panel, "Clothes collection name", string.IsNullOrWhiteSpace(project.DlcName) ? (suggestedName.Length == 0 ? "roupas" : suggestedName) : project.DlcName);
         var prefix = WorkflowUi.Check(panel, "Remove default added prefix (mp_m/mp_f)", project.RemoveDefaultCollectionPrefix);
         prefix.IsEnabled = project.Items.Count > 0;
+        if (project.PublishedCollection is not null)
+        {
+            name.IsReadOnly = true; prefix.IsEnabled = replace.IsEnabled = false;
+            replacementResource.IsReadOnly = replacementMale.IsReadOnly = replacementFemale.IsReadOnly = true;
+        }
         panel.Children.Add(new TextBlock { Text = "Extra options", Margin = new Thickness(0, 12, 0, 0) });
         var folders = WorkflowUi.Check(panel, "Create sub folders for cloth drawable types", project.CreateDrawableSubfolders);
         var extraYmt = WorkflowUi.Check(panel, "Disable extra YMT files creation", project.DisableExtraYmtFiles);
@@ -283,6 +306,10 @@ public sealed class BuildProjectWindow : Window
             snapshot.CreateMenyooTattooConfig = menyoo.IsChecked == true;
             var target = (types.SelectedItem as ListBoxItem)?.Content as string ?? "FiveM Resource";
             snapshot.BuildTarget = target;
+            var indexErrors = CollectionIndices.Validate(snapshot);
+            if (indexErrors.Count > 0) { new ErrorListWindow(indexErrors) { Owner = this }.ShowDialog(); return; }
+            var indexWarnings = CollectionIndices.Warnings(snapshot);
+            if (indexWarnings.Count > 0 && MessageBox.Show(this, string.Join("\n", indexWarnings) + "\nContinuar o build?", "Collection: capacidade", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             busy = true; panel.IsEnabled = false; progress.Text = $"Exportando {ProjectOperationSummary.Describe(snapshot)}...\nGerando stream, YMT e shop.meta...";
             buildBar.Visibility = Visibility.Visible; buildBar.IsIndeterminate = true;
             try

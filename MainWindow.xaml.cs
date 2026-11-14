@@ -287,6 +287,8 @@ public partial class MainWindow : Window
         var dialog = new ProjectSettingsWindow(_project, AbsoluteAssetPath) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         // Retain item identities used by the selected list and active previews.
+        foreach (var item in _project.Items)
+            item.ExportPosition = dialog.Result.Items.Single(candidate => candidate.Id == item.Id).ExportPosition;
         dialog.Result.Items = _project.Items;
         _project = dialog.Result;
         _dirty = true;
@@ -311,7 +313,8 @@ public partial class MainWindow : Window
         {
             var existing = _project.Items.Select(item => item.Id).ToHashSet();
             ImportFolder_Click(button, new RoutedEventArgs());
-            if (gender is not null) foreach (var item in _project.Items.Where(item => !existing.Contains(item.Id))) item.Gender = gender;
+            if (gender is not null) foreach (var item in _project.Items.Where(item => !existing.Contains(item.Id)))
+            { item.Gender = gender; CollectionIndices.Append(_project, item); }
             RefreshItems();
         });
         Entry("Add tattoo", () => OpenTattooEditor(gender == "Masculino" ? "Male" : gender == "Feminino" ? "Female" : "Both"));
@@ -325,7 +328,8 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
         var known = _project.Items.Select(item => item.Id).ToHashSet();
         ImportFiles(dialog.FileNames);
-        foreach (var item in _project.Items.Where(item => !known.Contains(item.Id))) item.Gender = gender;
+        foreach (var item in _project.Items.Where(item => !known.Contains(item.Id)))
+        { item.Gender = gender; CollectionIndices.Append(_project, item); }
         RefreshItems();
     }
 
@@ -355,6 +359,8 @@ public partial class MainWindow : Window
         { Status("Heel Height must be between 0 and 1."); return; }
         if (position != (item.ExportPosition ?? item.SourceIndex ?? 0))
         {
+            if (_project.PublishedCollection is not null)
+            { PositionBox.Text = (item.ExportPosition ?? item.SourceIndex ?? 0).ToString(); Status("Collection publicada: reordenação bloqueada; adicione peças no final."); return; }
             var group = _project.Items.Where(candidate => candidate.Gender == item.Gender && candidate.Category == item.Category)
                 .OrderBy(candidate => candidate.ExportPosition ?? candidate.SourceIndex).ThenBy(candidate => candidate.Name).ToList();
             group.Remove(item); group.Insert(Math.Clamp(position, 0, group.Count), item);
@@ -424,6 +430,7 @@ public partial class MainWindow : Window
                 continue;
             }
             item.MetricsKey = key;
+            if (item.IsDummy) { item.ModelSizeBytes = null; item.MaxTextureSizeBytes = null; continue; }
             try
             {
                 var modelPath = AbsoluteAssetPath(item.ModelPath);
@@ -765,6 +772,7 @@ public partial class MainWindow : Window
                 item.AlternateModelPaths = item.AlternateModelPaths.Select(value => Path.Combine(root, value)).ToList();
                 item.TexturePaths = item.TexturePaths.Select(value => string.IsNullOrWhiteSpace(value) ? "" : Path.Combine(root, value)).ToList();
                 if (item.PhysicsPath is not null) item.PhysicsPath = Path.Combine(root, item.PhysicsPath);
+                CollectionIndices.Append(_project, item);
                 _project.Items.Add(item);
             }
             _dirty = true;
@@ -1625,8 +1633,11 @@ public partial class MainWindow : Window
         var category = TypeBox.SelectedItem as string;
         if (gender is null || category is null) return;
         if (item.Gender == gender && item.Category == category) return;
+        if (CollectionIndices.IsPublished(_project, item))
+        { ShowDetails(item); Status("Collection publicada: mudança de gênero/slot bloqueada para preservar índices."); return; }
         item.Gender = gender;
         item.Category = category;
+        if (_project.PublishedCollection is not null) CollectionIndices.Append(_project, item);
         _dirty = true;
         RefreshItems();
     }
@@ -1634,6 +1645,14 @@ public partial class MainWindow : Window
     private void Remove_Click(object sender, RoutedEventArgs e)
     {
         if (ItemList.SelectedItem is not ClothItem item) return;
+        if (CollectionIndices.IsPublished(_project, item))
+        {
+            if (item.IsDummy) { Status("Reserva publicada: remoção bloqueada para preservar o índice."); return; }
+            if (MessageBox.Show(this, "Esta peça tem um índice publicado. Remover deslocaria as roupas salvas no servidor. Substituir por dummy (Replace with Dummy), preservando o índice?",
+                "Collection publicada", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                ReplaceSelectedWithDummy();
+            return;
+        }
         if (_project.ReplaceWithDummyOnRemove && !item.IsDummy)
             ClothEditActions.ReplaceWithDummy(item);
         else _project.Items.Remove(item);
@@ -1961,7 +1980,7 @@ public partial class MainWindow : Window
 
     private List<string> ValidateProject()
     {
-        var errors = new List<string>();
+        var errors = FiveMResourceValidator.Validate(_project);
         var outputNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in _project.Items)
         {

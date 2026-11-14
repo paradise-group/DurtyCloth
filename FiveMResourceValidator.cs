@@ -7,6 +7,9 @@ namespace FooxClothStudio;
 
 public static class FiveMResourceValidator
 {
+    public static List<string> Validate(ClothProject project) =>
+        CollectionIndices.Validate(project).Concat(CollectionIndices.Warnings(project)).ToList();
+
     private static readonly string[] Slots =
         ["HEAD", "BERD", "HAIR", "UPPR", "LOWR", "HAND", "FEET", "TEEF", "ACCS", "TASK", "DECL", "JBIB"];
     private static readonly string[] Anchors =

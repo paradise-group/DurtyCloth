@@ -23,6 +23,7 @@ public static class AddonExporter
 
     public static string Export(ClothProject project, Func<string, string> resolvePath, string parentFolder)
     {
+        CollectionIndices.EnsureValid(project);
         var items = project.Items.ToArray();
         if (items.Length == 0 && project.Tattoos.Count == 0) throw new InvalidDataException("O projeto não contém peças ou tatuagens.");
         if (items.Any(x => x.Gender is not ("Masculino" or "Feminino")))
@@ -81,7 +82,7 @@ public static class AddonExporter
                 var props = new Dictionary<int, List<(ClothItem Item, int TextureCount)>>();
                 foreach (var group in groups)
                 {
-                    var ordered = group.OrderBy(x => x.ExportPosition ?? x.SourceIndex).ThenBy(x => x.Name).ToArray();
+                    var ordered = CollectionIndices.Ordered(group).ToArray();
                     var entries = new List<(ClothItem, int)>();
                     for (var index = 0; index < ordered.Length; index++)
                     {
@@ -128,7 +129,7 @@ public static class AddonExporter
                     .GroupBy(x => Array.IndexOf(PropCodes, CodeOf(x.Category))).OrderBy(g => g.Key))
                 {
                     Directory.CreateDirectory(propFolder);
-                    var ordered = group.OrderBy(x => x.ExportPosition ?? x.SourceIndex).ThenBy(x => x.Name).ToArray();
+                    var ordered = CollectionIndices.Ordered(group).ToArray();
                     var entries = new List<(ClothItem, int)>();
                     for (var index = 0; index < ordered.Length; index++)
                     {
@@ -205,6 +206,7 @@ public static class AddonExporter
                     items.Select(item => new { item.Name, item.Gender, item.Category, item.SourceIndex,
                         Textures = item.TexturePaths.Count, item.Creator, item.CreatorWebsite, item.CreatorDescription }),
                     new JsonSerializerOptions { WriteIndented = true }), Utf8);
+            CollectionIndices.Write(project, output);
             var validation = FiveMResourceValidator.Validate(output);
             if (validation.Count > 0)
                 throw new InvalidDataException("Addon gerado com inconsistências: " +

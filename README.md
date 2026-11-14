@@ -122,6 +122,10 @@ Aplicativo Windows independente para organizar arquivos de roupas GTA V/FiveM.
 
 ## Limites desta versão
 
+Collections publicadas podem ter seus índices protegidos em **Project Settings > General**.
+Veja [o fluxo de publicação](docs/COLLECTIONS.md): snapshot persistido, adição no final,
+remoção com dummy e `collection-index.json` em cada build de addon.
+
 A saída de addon foi comparada estaticamente com um recurso real, mas ainda
 precisa de teste no FXServer. A prévia 3D ainda não reproduz todos os materiais
 e efeitos do jogo. PNG gera mipmaps automaticamente; DDS mantém os mipmaps do

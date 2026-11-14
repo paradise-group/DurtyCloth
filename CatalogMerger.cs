@@ -41,7 +41,7 @@ public static class CatalogMerger
                 foreach (var texture in candidate.TexturePaths) validateYtd(texture);
                 var group = project.Items.Concat(newPieces).Where(item => item.Gender == candidate.Gender && item.Category == candidate.Category).ToArray();
                 candidate.ExportPosition = group.Length == 0 ? 0 : checked(group.Max(item => item.ExportPosition ?? item.SourceIndex ?? 0) + 1);
-                if (project.ReplaceDummiesOnAdding)
+                if (project.ReplaceDummiesOnAdding && project.PublishedCollection is null)
                 {
                     var dummy = project.Items.Where(item => item.IsDummy && item.Gender == candidate.Gender && item.Category == candidate.Category && !replaced.Contains(item))
                         .OrderBy(item => item.ExportPosition ?? item.SourceIndex).FirstOrDefault();

@@ -11,6 +11,7 @@ public sealed class ClothProject
     public string Version { get; set; } = "";
     public string Description { get; set; } = "";
     public string DlcName { get; set; } = "";
+    public PublishedCollectionSnapshot? PublishedCollection { get; set; }
     public double ModelWarningMiB { get; set; } = 4;
     public double TextureWarningMiB { get; set; } = 4;
     public string OutputFolder { get; set; } = "";
@@ -38,6 +39,19 @@ public sealed class ClothProject
     public string? SourceAlternateVariationsPath { get; set; }
     public List<ClothItem> Items { get; set; } = [];
 }
+
+public sealed class PublishedCollectionSnapshot
+{
+    public string DlcName { get; set; } = "";
+    public bool RemoveDefaultCollectionPrefix { get; set; }
+    public bool ReplaceDlcCollection { get; set; }
+    public string ReplacementResource { get; set; } = "";
+    public string ReplacementMaleCollection { get; set; } = "";
+    public string ReplacementFemaleCollection { get; set; } = "";
+    public List<PublishedDrawable> Drawables { get; set; } = [];
+}
+
+public sealed record PublishedDrawable(string Gender, string Slot, string Collection, int LocalIndex, Guid ItemId);
 
 public sealed class TattooItem
 {
