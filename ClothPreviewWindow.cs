@@ -74,8 +74,8 @@ public sealed class ClothPreviewWindow : Window
         WorkflowUi.Button(ped, "Select GTA V Folder", (_, _) => SelectGameFolder?.Invoke());
         ped.Children.Add(_pedStatus);
         tabs.Items.Add(new TabItem { Header = "Ped", Content = ped });
-        tabs.Items.Add(new TabItem { Header = "Models data", Content = new ScrollViewer { Content = _models } });
-        tabs.Items.Add(new TabItem { Header = "Textures data", Content = new ScrollViewer { Content = _textures } });
+        tabs.Items.Add(new TabItem { Header = "Models data", Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _models } });
+        tabs.Items.Add(new TabItem { Header = "Textures data", Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _textures } });
         var surface = new Border { Background = new RadialGradientBrush { GradientOrigin = new Point(.48, .32), Center = new Point(.5, .4), RadiusX = .8, RadiusY = .85, GradientStops = new GradientStopCollection { new(Color.FromRgb(48, 62, 89), 0), new(Color.FromRgb(25, 32, 50), .55), new(Color.FromRgb(12, 16, 28), 1) } }, Child = _viewport };
         Grid.SetColumn(surface, 1); root.Children.Add(surface); Content = root;
         var unlock = new CheckBox { Content = "Destravar ped", Foreground = Brushes.White,

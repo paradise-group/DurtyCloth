@@ -24,7 +24,7 @@ public sealed class TattooWindow : Window
         var list = new ListBox { Name = "TattooList", Height = 500, Background = WorkflowUi.Panel, Foreground = Brushes.White }; RegisterName(list.Name, list); left.Children.Add(list);
         var right = WorkflowUi.Stack(); Grid.SetColumn(right, 1); grid.Children.Add(right);
         var tabs = new TabControl(); right.Children.Add(tabs);
-        var general = WorkflowUi.Stack(); tabs.Items.Add(new TabItem { Header = "General", Content = new ScrollViewer { Content = general, Height = 480 } });
+        var general = WorkflowUi.Stack(); tabs.Items.Add(new TabItem { Header = "General", Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = general, Height = 480 } });
         var name = WorkflowUi.Field(general, "Name / overlay hash", ""); name.Name = "TattooName"; RegisterName(name.Name, name);
         var label = WorkflowUi.Field(general, "Label", "");
         var file = WorkflowUi.Field(general, "Image / texture file", ""); file.IsReadOnly = true;

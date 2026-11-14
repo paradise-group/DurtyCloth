@@ -74,8 +74,11 @@ public static class WorkflowUi
     }
     public static Button Button(Panel panel, string label, RoutedEventHandler click)
     {
+        // Side-by-side buttons (footer rows) get a gap from the previous one.
+        var horizontal = panel is WrapPanel || panel is StackPanel { Orientation: Orientation.Horizontal };
+        var gap = horizontal && panel.Children.Count > 0 ? 8 : 0;
         var button = new Button { Content = label, Padding = new Thickness(8, 4, 8, 4),
-            Background = Accent, Foreground = Brushes.White, Margin = new Thickness(0, 8, 0, 0) };
+            Background = Accent, Foreground = Brushes.White, Margin = new Thickness(gap, 8, 0, 0) };
         button.Click += click; panel.Children.Add(button); return button;
     }
     public static void Theme(Window window, string title, double width, double height)
@@ -185,7 +188,7 @@ public sealed class ProjectSettingsWindow : Window
         });
         RegisterName("ApplyProjectSettings", apply);
         WorkflowUi.Button(footer, "Cancel", (_, _) => DialogResult = false);
-        tabs.Items.Add(new TabItem { Header = "General", Content = new ScrollViewer { Content = general } });
+        tabs.Items.Add(new TabItem { Header = "General", Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = general } });
         var sharing = WorkflowUi.Stack();
         sharing.Children.Add(new TextBlock { Text = "Export project packages with Project > Export project.\nPackages include all referenced YDD, YTD and YLD files.", TextWrapping = TextWrapping.Wrap });
         WorkflowUi.Button(sharing, "Export project package", (_, _) =>
@@ -212,7 +215,7 @@ public sealed class BuildProjectWindow : Window
     public BuildProjectWindow(ClothProject project, Func<string, string> resolve)
     {
         WorkflowUi.Theme(this, "Build Project", 360, 690);
-        var panel = WorkflowUi.Stack(); Content = new ScrollViewer { Content = panel };
+        var panel = WorkflowUi.Stack(); Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = panel };
         panel.Children.Add(new TextBlock { Text = "Target resource type" });
         var types = new ListBox { Background = WorkflowUi.Panel, Foreground = Brushes.White, Margin = new Thickness(0, 4, 0, 6) };
         foreach (var label in new[] { "alt:V Resource", "Single player RPF", "FiveM Resource", "RageMP Resource" })

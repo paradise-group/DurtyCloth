@@ -31,9 +31,18 @@ public partial class MainWindow : Window
     private FiveMResource? _resource;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    // Keeps the first-open window inside the usable screen area (taskbar and DPI scaling included).
+    private void FitToWorkArea()
+    {
+        var area = SystemParameters.WorkArea;
+        Width = Math.Max(MinWidth, Math.Min(Width, area.Width * 0.92));
+        Height = Math.Max(MinHeight, Math.Min(Height, area.Height * 0.92));
+    }
+
     public MainWindow()
     {
         InitializeComponent();
+        FitToWorkArea();
         RefreshRecentFilesMenu();
         Resources[typeof(ComboBox)] = WorkflowUi.ComboStyle();
         TypeBox.ItemsSource = ClothLabelConverter.TypeChoices(false).ToArray();

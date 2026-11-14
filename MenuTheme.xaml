@@ -11,7 +11,7 @@
                     <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
                     <TextBlock x:Name="Arrow" Grid.Column="3" Text="›" Margin="8,0,0,0" Visibility="Collapsed" Foreground="{TemplateBinding Foreground}"/>
                     <Popup x:Name="PART_Popup" Placement="Right" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" Focusable="False" AllowsTransparency="True">
-                        <Border Background="#292D31" BorderBrush="#51565D" BorderThickness="1" Padding="2"><ScrollViewer MaxHeight="700"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer></Border>
+                        <Border Background="#292D31" BorderBrush="#51565D" BorderThickness="1" Padding="2"><ScrollViewer MaxHeight="700" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer></Border>
                     </Popup>
                 </Grid>
             </Border>
