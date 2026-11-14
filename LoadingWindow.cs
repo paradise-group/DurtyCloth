@@ -6,7 +6,8 @@ namespace FooxClothStudio;
 internal sealed class LoadingWindow : Window
 {
     private readonly TextBlock _stage = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock _percentage = new() { Text = "0%", HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly TextBlock _percentage = new() { Text = "0% · Estimating remaining time...", TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly ProgressEstimate _estimate = new();
     private readonly ProgressBar _bar = new() { Height = 12, Margin = new Thickness(0, 16, 0, 0), IsIndeterminate = true };
     private bool _complete;
 
@@ -29,13 +30,14 @@ internal sealed class LoadingWindow : Window
 
     public void Report(int done, int total, string stage)
     {
+        if (_complete) return;
         _stage.Text = stage;
         _bar.IsIndeterminate = total <= 0;
+        _percentage.Text = _estimate.Report(done, total);
         if (total > 0)
         {
             _bar.Maximum = total;
             _bar.Value = Math.Clamp(done, 0, total);
-            _percentage.Text = $"{100.0 * _bar.Value / total:0}%";
         }
     }
 

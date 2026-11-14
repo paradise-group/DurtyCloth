@@ -339,6 +339,8 @@ internal sealed class PhotoExportOptionsWindow : Window
 internal sealed class PhotoExportProgressWindow : Window
 {
     private readonly TextBlock _label = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _timing = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly ProgressEstimate _estimate = new();
     private readonly ProgressBar _bar = new() { Height = 12, Margin = new Thickness(0, 12, 0, 12) };
     private readonly int _total;
     private bool _complete;
@@ -352,14 +354,21 @@ internal sealed class PhotoExportProgressWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var panel = WorkflowUi.Stack(); Content = panel;
-        panel.Children.Add(_label); panel.Children.Add(_bar);
+        panel.Children.Add(_label); panel.Children.Add(_timing); panel.Children.Add(_bar);
         _bar.Maximum = Math.Max(total, 1);
         var cancel = new Button { Content = "Cancelar", Width = 100, HorizontalAlignment = HorizontalAlignment.Right };
-        cancel.Click += (_, _) => { CancelRequested = true; cancel.IsEnabled = false; _label.Text += "\nA terminar a imagem atual..."; };
+        cancel.Click += (_, _) => { CancelRequested = true; cancel.IsEnabled = false; _timing.Text = "Finishing the current image..."; };
         panel.Children.Add(cancel);
         Closing += (_, args) => { if (!_complete) { CancelRequested = true; args.Cancel = true; } };
         Report(0, "A preparar");
     }
-    public void Report(int done, string item) { _label.Text = $"{done}/{_total}\n{item}"; _bar.Value = done; }
+    public void Report(int done, string item)
+    {
+        if (_complete) return;
+        _label.Text = $"{done}/{_total}\n{item}";
+        _timing.Text = CancelRequested ? "Finishing the current image..." : _estimate.Report(done, _total);
+        _bar.IsIndeterminate = _total <= 0;
+        _bar.Value = done;
+    }
     public void Complete() { _complete = true; Close(); }
 }
