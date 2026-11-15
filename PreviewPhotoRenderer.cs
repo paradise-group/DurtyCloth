@@ -46,6 +46,8 @@ public static class PreviewPhotoRenderer
         string category, Color background)
     {
         var slot = category.Contains('[') ? category.Split('[').Last().TrimEnd(']') : "";
+        if (slot == "p_head" && ped is null)
+            garment = OrientStandaloneHat(garment);
         if (ped is not null && ModelPreview.PropBoneTag(slot) is int boneTag)
             garment = ModelPreview.AttachToBone(garment, ped.Attachments[boneTag]);
         var focus = Bounds(garment.Parts);
@@ -139,6 +141,17 @@ public static class PreviewPhotoRenderer
         var bitmap = new RenderTargetBitmap(Size, Size, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(surface);
         return bitmap;
+    }
+
+    private static ModelPreviewData OrientStandaloneHat(ModelPreviewData garment)
+    {
+        var bounds = Bounds(garment.Parts);
+        var rotation = new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 0, 1), 90),
+            new Point3D(bounds.CenterX, bounds.CenterY, bounds.CenterZ));
+        return garment with { Parts = garment.Parts.Select(part => part with
+        {
+            Positions = part.Positions.Select(rotation.Transform).ToArray()
+        }).ToArray() };
     }
 
     private static ModelPreviewPart[] OrderHairLayers(ModelPreviewPart[] parts)
