@@ -15,7 +15,7 @@ public static class ModelPreview
 {
     private const int MaxTriangles = 25_000;
 
-    public static ModelPreviewData Read(string path, bool normalize = true)
+    public static ModelPreviewData Read(string path, bool normalize = true, bool preserveAllTriangles = false)
     {
         var ydd = new YddFile();
         ydd.Load(File.ReadAllBytes(path));
@@ -47,7 +47,7 @@ public static class ModelPreview
 
         if (sourceTriangles == 0)
             throw new InvalidDataException("O YDD não contém triângulos válidos para prévia.");
-        var budget = Math.Min(MaxTriangles, sourceTriangles);
+        var budget = preserveAllTriangles ? sourceTriangles : Math.Min(MaxTriangles, sourceTriangles);
         var allocations = geometryEntries.Select(entry =>
             Math.Max(1, (int)((long)budget * entry.TriangleCount / sourceTriangles))).ToArray();
         while (allocations.Sum() > budget)

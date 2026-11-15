@@ -24,7 +24,7 @@ public static class PreviewPhotoRenderer
             .ToDictionary(tag => tag, tag => ModelPreview.BoneAttachment(head.ModelPath, tag));
         foreach (var asset in assets)
         {
-            var model = ModelPreview.Read(asset.ModelPath, false);
+            var model = ModelPreview.Read(asset.ModelPath, false, preserveAllTriangles: true);
             var images = asset.TexturePath is null ? [] : MainWindow.ReadMatchingTextures(asset.TexturePath, model);
             foreach (var part in model.Parts)
             {
@@ -64,10 +64,11 @@ public static class PreviewPhotoRenderer
             }
         }
         var itemReachesFeet = focus.CenterY - focus.SizeY / 2 < -0.85;
-        var parts = ped is null ? garment.Parts : garment.Parts.Concat(
-            ped.Parts.Where(p => !p.TextureName!.StartsWith("__ped_" + slot + "_", StringComparison.Ordinal) &&
+        var garmentParts = slot == "hair" ? OrderHairLayers(garment.Parts) : garment.Parts;
+        var bodyParts = ped is null ? [] : ped.Parts.Where(p => !p.TextureName!.StartsWith("__ped_" + slot + "_", StringComparison.Ordinal) &&
                 !p.TextureName.StartsWith("__ped_hair_", StringComparison.Ordinal) &&
-                !(slot == "teef" && itemReachesFeet && p.TextureName.StartsWith("__ped_feet_", StringComparison.Ordinal)))).ToArray();
+                !(slot == "teef" && itemReachesFeet && p.TextureName.StartsWith("__ped_feet_", StringComparison.Ordinal))).ToArray();
+        var parts = slot == "hair" ? bodyParts.Concat(garmentParts).ToArray() : garmentParts.Concat(bodyParts).ToArray();
         var images = new Dictionary<string, BitmapSource>(garmentTextures, StringComparer.OrdinalIgnoreCase);
         if (ped is not null)
             foreach (var entry in ped.Textures) images[entry.Key] = entry.Value;
@@ -138,6 +139,36 @@ public static class PreviewPhotoRenderer
         var bitmap = new RenderTargetBitmap(Size, Size, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(surface);
         return bitmap;
+    }
+
+    private static ModelPreviewPart[] OrderHairLayers(ModelPreviewPart[] parts)
+    {
+        // WPF does not sort transparent hair cards. Merge matching materials so
+        // cards from different geometries can be drawn together, back to front.
+        // The photo camera looks down -Z; keep every vertex, UV and triangle.
+        return parts.GroupBy(part => (part.TextureName, HasUvs: part.TextureCoordinates.Length == part.Positions.Length))
+            .Select(group =>
+            {
+                var positions = new List<Point3D>();
+                var coordinates = new List<Point>();
+                var triangles = new List<(int A, int B, int C, double Depth)>();
+                foreach (var part in group)
+                {
+                    var offset = positions.Count;
+                    positions.AddRange(part.Positions);
+                    if (group.Key.HasUvs) coordinates.AddRange(part.TextureCoordinates);
+                    for (var index = 0; index + 2 < part.Indices.Length; index += 3)
+                    {
+                        var a = part.Indices[index]; var b = part.Indices[index + 1]; var c = part.Indices[index + 2];
+                        triangles.Add((offset + a, offset + b, offset + c,
+                            (part.Positions[a].Z + part.Positions[b].Z + part.Positions[c].Z) / 3));
+                    }
+                }
+                return new ModelPreviewPart(positions.ToArray(), triangles.OrderBy(triangle => triangle.Depth)
+                    .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C }).ToArray(),
+                    coordinates.ToArray(), group.Key.TextureName);
+            })
+            .OrderBy(part => part.Positions.Length == 0 ? 0 : part.Positions.Average(point => point.Z)).ToArray();
     }
 
     public static void SaveFlatTexture(string destination, BitmapSource image, Color background)

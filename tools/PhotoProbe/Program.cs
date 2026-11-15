@@ -13,6 +13,24 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 4 && args[0] == "--hair-photo-check")
+        {
+            try { HairPhotoTests.Run(args[1], args[2], args[3]); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 1 && args[0] == "--photo-resume-test")
+        {
+            try { PhotoResumeTests.Run(); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 1 && args[0] == "--photo-index-test")
+        {
+            try { PhotoIndexTests.Run(); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 2 && args[0] == "--webp-test")
         {
             try { WebPExportTests.Run(args[1]); }
