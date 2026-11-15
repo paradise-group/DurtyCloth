@@ -32,6 +32,13 @@
 
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="3.1.12" />
+    <PackageReference Include="SkiaSharp" Version="4.156.1" GeneratePathProperty="true" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.156.1" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(PkgSkiaSharp)/LICENSE.txt" Link="licenses/SkiaSharp-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(PkgSkiaSharp_NativeAssets_Win32)/THIRD-PARTY-NOTICES.txt" Link="licenses/Skia-THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

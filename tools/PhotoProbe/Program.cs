@@ -13,6 +13,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--webp-test")
+        {
+            try { WebPExportTests.Run(args[1]); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 4 && args[0] == "--original-dry-run")
         {
             var project = System.Text.Json.JsonSerializer.Deserialize<ClothProject>(File.ReadAllText(args[1]))!;

@@ -279,15 +279,15 @@ public partial class MainWindow
 
 internal sealed class PhotoExportOptionsWindow : Window
 {
-    private readonly TextBox _background = new() { Text = "#00FF00", Width = 120, Margin = new Thickness(0, 5, 0, 12) };
-    private readonly CheckBox _transparent = new() { Content = "Sem fundo (PNG transparente)", Margin = new Thickness(0, 0, 0, 8) };
-    private readonly ComboBox _format = new() { ItemsSource = new[] { "PNG", "JPEG" }, SelectedIndex = 0, Margin = new Thickness(0, 4, 0, 10) };
-    private readonly ComboBox _size = new() { ItemsSource = new[] { 256, 384, 512, 768 }, SelectedItem = 768, Margin = new Thickness(0, 4, 0, 10) };
-    private readonly Slider _quality = new() { Minimum = 40, Maximum = 100, Value = 85, TickFrequency = 1, IsSnapToTickEnabled = true, IsEnabled = false };
+    private readonly TextBox _background = new() { Text = "#625F68", Width = 120, Margin = new Thickness(0, 5, 0, 12) };
+    private readonly CheckBox _transparent = new() { Content = "Transparent background (PNG / WebP)", Margin = new Thickness(0, 0, 0, 8) };
+    private readonly ComboBox _format = new() { ItemsSource = new[] { "WebP", "PNG", "JPEG" }, SelectedIndex = 0, Margin = new Thickness(0, 4, 0, 10) };
+    private readonly ComboBox _size = new() { ItemsSource = new[] { 256, 384, 512, 768 }, SelectedItem = 512, Margin = new Thickness(0, 4, 0, 10) };
+    private readonly Slider _quality = new() { Minimum = 40, Maximum = 100, Value = 85, TickFrequency = 1, IsSnapToTickEnabled = true };
     private readonly CheckBox _ped = new() { Content = "Mostrar ped base (se GTA V estiver configurado)", IsChecked = false };
-    public Color PhotoBackground { get; private set; } = Colors.Lime;
+    public Color PhotoBackground { get; private set; } = Color.FromRgb(0x62, 0x5F, 0x68);
     public bool IncludePed => _ped.IsChecked == true;
-    public PhotoImageOptions ImageOptions { get; private set; } = new();
+    public PhotoImageOptions ImageOptions { get; private set; } = new(512, "WebP", 85);
     public PhotoExportOptionsWindow()
     {
         WorkflowUi.Theme(this, "Exportar fotografias", 470, 310);
@@ -296,18 +296,18 @@ internal sealed class PhotoExportOptionsWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var panel = WorkflowUi.Stack(); Content = panel;
-        panel.Children.Add(new TextBlock { Text = "Formato: PNG preserva transparência; JPEG comprime com perda." });
+        panel.Children.Add(new TextBlock { Text = "WebP compresses with transparency; PNG is lossless; JPEG uses an opaque background.", TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(_format);
         panel.Children.Add(new TextBlock { Text = "Tamanho em píxeis (512 recomendado para miniaturas):" });
         panel.Children.Add(_size);
-        var qualityLabel = new TextBlock { Text = "Qualidade JPEG: 85%", Margin = new Thickness(0, 0, 0, 4) };
+        var qualityLabel = new TextBlock { Text = "Quality: 85%", Margin = new Thickness(0, 0, 0, 4) };
         panel.Children.Add(qualityLabel);
         panel.Children.Add(_quality);
-        _quality.ValueChanged += (_, _) => qualityLabel.Text = $"Qualidade JPEG: {_quality.Value:0}%";
+        _quality.ValueChanged += (_, _) => qualityLabel.Text = $"Quality: {_quality.Value:0}%";
         _format.SelectionChanged += (_, _) =>
         {
             var jpeg = _format.SelectedItem as string == "JPEG";
-            _quality.IsEnabled = jpeg;
+            _quality.IsEnabled = _format.SelectedItem as string != "PNG";
             if (jpeg) _transparent.IsChecked = false;
             _transparent.IsEnabled = !jpeg;
         };
@@ -317,7 +317,7 @@ internal sealed class PhotoExportOptionsWindow : Window
         _transparent.Unchecked += (_, _) => _background.IsEnabled = true;
         panel.Children.Add(_transparent);
         panel.Children.Add(_ped);
-        panel.Children.Add(new TextBlock { Text = "Uma imagem por peça e textura. Tamanhos menores reduzem o peso dos ficheiros. JPEG usa fundo opaco. A saída será criada numa pasta nova.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 12) });
+        panel.Children.Add(new TextBlock { Text = "One image per item and texture. Smaller sizes reduce file weight. WebP and JPEG support adjustable quality. Output is created in a new folder.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 12) });
         var button = new Button { Content = "Continuar", Width = 110, HorizontalAlignment = HorizontalAlignment.Right };
         button.Click += (_, _) =>
         {
