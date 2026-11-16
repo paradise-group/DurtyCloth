@@ -21,6 +21,10 @@ internal static class GtaPhotoTests
     {
         Directory.CreateDirectory(output);
         var catalog = GtaPhotoCatalog.Scan(game, Path.Combine(output, "cache"), new Progress());
+        var femaleHead = GamePedAssets.Load(game, "Feminino").Single(asset => asset.Slot == "head");
+        if (Path.GetFileName(femaleHead.ModelPath) != "head_021_r.ydd"
+            || GamePedAssets.Load(game, "Female").Single(asset => asset.Slot == "head").ModelPath != femaleHead.ModelPath)
+            throw new Exception("Female photo contexts did not select a female head parent.");
         if (catalog.Project.Items.Select(item => item.Id).Distinct().Count() != catalog.Project.Items.Count)
             throw new Exception("Duplicate GTA model UUIDs.");
         var pants = catalog.Project.Items.Single(item => item.OriginalModelFileName == "mp_m_freemode_01^lowr_000_r.ydd");
@@ -46,6 +50,14 @@ internal static class GtaPhotoTests
             var texture = AppearancePhotoTextures.Select(file, appearance.Name).Single();
             var decode = typeof(MainWindow).GetMethod("DecodeTextureBitmap", BindingFlags.NonPublic | BindingFlags.Static)!;
             var image = (BitmapSource)decode.Invoke(null, [texture, 1024])!;
+            if (texture.Format == CodeWalker.GameFiles.TextureFormat.D3DFMT_A8)
+            {
+                var pixels = new byte[image.PixelWidth * image.PixelHeight * 4]; image.CopyPixels(pixels, image.PixelWidth * 4, 0);
+                if (!Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4 + 3] == 0)
+                    || !Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4 + 3] > 0)
+                    || Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4] != 255))
+                    throw new Exception("The native A8 overlay was decoded as an opaque grayscale picture.");
+            }
             using (var raw = File.Create(Path.Combine(output, appearance.OverlayCategory + "-texture.png")))
             {
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); encoder.Save(raw);
@@ -125,10 +137,10 @@ internal static class GtaPhotoTests
             categories = catalog.Project.Items.GroupBy(item => item.Gender + "/" + item.Category)
                 .ToDictionary(group => group.Key, group => group.Count())
         };
-        foreach (var (filename, rear) in new[]
+        foreach (var filename in new[]
         {
-            ("mp_m_freemode_01_p_mp_m_sum2^p_head_005.ydd", false),
-            ("mp_m_freemode_01_p_mp_m_sum2^p_head_007.ydd", true)
+            "mp_m_freemode_01_p_mp_m_sum2^p_head_005.ydd",
+            "mp_m_freemode_01_p_mp_m_sum2^p_head_007.ydd"
         })
         {
             var hat = catalog.Project.Items.SingleOrDefault(item => item.OriginalModelFileName == filename);
@@ -137,8 +149,13 @@ internal static class GtaPhotoTests
             var model = ModelPreview.Read(catalog.Resolve(hat.ModelPath), false, true);
             var textures = (Dictionary<string, BitmapSource>)read.Invoke(null, [catalog.Resolve(hat.TexturePaths[0]), model])!;
             var aligned = ModelPreview.AttachToBone(model, ped.Attachments[31086]);
-            if (PhotoView.ShowBack(aligned, textures, "p_head") != rear)
-                throw new Exception("Incorrect hat view for " + filename + "; plain caps must face front and the rear luminous logo must stay visible.");
+            var expected = Path.Combine(output, "front-reference-" + hat.Id + ".png");
+            var actual = Path.Combine(output, "front-hat-" + hat.Id + ".png");
+            var background = Color.FromRgb(98, 95, 104);
+            PreviewPhotoRenderer.Save(expected, aligned, textures, null, "Fixture", background);
+            PreviewPhotoRenderer.Save(actual, model, textures, null, hat.Category, background, standaloneAttachment: ped.Attachments[31086]);
+            if (!File.ReadAllBytes(expected).SequenceEqual(File.ReadAllBytes(actual)))
+                throw new Exception("The hat did not retain its aligned front view: " + filename);
         }
         File.WriteAllText(Path.Combine(output, "gta-photo-report.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"PASS: scanned {catalog.Project.Items.Count} GTA models and {report.textures} textures; stable UUIDs match previous exports; validated identity map; six real male/female clothing, hat and hair photos rendered with complete geometry and reusable UUID names.");

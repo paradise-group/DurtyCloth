@@ -8,7 +8,8 @@ using System.Windows.Media.Media3D;
 namespace FooxClothStudio;
 
 public sealed record PhotoPed(ModelPreviewPart[] Parts,
-    Dictionary<string, BitmapSource> Textures, Dictionary<int, Matrix3D> Attachments);
+    Dictionary<string, BitmapSource> Textures, Dictionary<int, Matrix3D> Attachments,
+    Dictionary<string, BitmapSource>? OverlayPalettes = null);
 
 public static class PreviewPhotoRenderer
 {
@@ -33,7 +34,7 @@ public static class PreviewPhotoRenderer
                 parts.Add(part with { TextureName = name });
             }
         }
-        return new PhotoPed(parts.ToArray(), textures, attachments);
+        return new PhotoPed(parts.ToArray(), textures, attachments, GamePedAssets.LoadOverlayPalettes(gameFolder));
     }
 
     public static void Save(string destination, ModelPreviewData garment,
@@ -110,7 +111,7 @@ public static class PreviewPhotoRenderer
             (parts, framingParts) = FrameEar(parts, garment.Parts, bodyParts);
             focus = Bounds(framingParts);
         }
-        if (PhotoView.ShowBack(garment, garmentTextures, slot))
+        if (PhotoView.ShowBack(slot))
         {
             var rotation = new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 1, 0), 180),
                 new Point3D(focus.CenterX, focus.CenterY, focus.CenterZ));

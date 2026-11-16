@@ -1,5 +1,6 @@
 using System.IO;
 using CodeWalker.GameFiles;
+using System.Windows.Media.Imaging;
 
 namespace FooxClothStudio;
 
@@ -7,6 +8,28 @@ public sealed record PedAsset(string Slot, string ModelPath, string? TexturePath
 public static class GamePedAssets
 {
     private static readonly object Gate = new();
+    private static readonly Dictionary<string, Dictionary<string, BitmapSource>> PaletteCache = new(StringComparer.OrdinalIgnoreCase);
+    private const string MaleHead = "000";
+    private const string FemaleHead = "021";
+    public static Dictionary<string, BitmapSource> LoadOverlayPalettes(string gameFolder)
+    {
+        lock (Gate)
+        {
+            var key = Path.GetFullPath(gameFolder);
+            if (PaletteCache.TryGetValue(key, out var existing)) return existing;
+            var catalog = GtaPhotoCatalog.Scan(gameFolder);
+            var dictionary = new YtdFile();
+            dictionary.Load(File.ReadAllBytes(catalog.Resolve("strm_peds_mpshare.ytd")));
+            var result = new Dictionary<string, BitmapSource>();
+            foreach (var name in new[] { "mp_hair_tint", "mp_makeup_tint" })
+            {
+                var texture = AppearancePhotoTextures.Select(dictionary, name).Single();
+                result[name] = MainWindow.DecodeTextureBitmap(texture, 0);
+            }
+            PaletteCache[key] = result;
+            return result;
+        }
+    }
     public static string? FindGameFolder()
     {
         var saved = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ParadiseClothStudio", "gta-folder.txt");
@@ -18,7 +41,8 @@ public static class GamePedAssets
     {
         lock (Gate)
         {
-            var ped = gender == "Feminino" ? "mp_f_freemode_01" : "mp_m_freemode_01";
+            var isFemale = gender is "Feminino" or "Female" or "female";
+            var ped = isFemale ? "mp_f_freemode_01" : "mp_m_freemode_01";
             var archivePath = Path.Combine(gameFolder, "x64v.rpf");
             var stamp = new FileInfo(archivePath);
             var identity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(gameFolder).ToLowerInvariant() + stamp.Length + stamp.LastWriteTimeUtc.Ticks)))[..16];
@@ -31,10 +55,10 @@ public static class GamePedAssets
             var directory = All(archive).SelectMany(f => f.AllEntries ?? []).OfType<RpfDirectoryEntry>().FirstOrDefault(e => e.Name == ped)
                 ?? throw new InvalidDataException("Freemode ped assets not found in x64v.rpf.");
             var result = new List<PedAsset>();
-            foreach (var (slot, preferred) in new[] { ("head", "000"), ("hair", "004"), ("uppr", "015"), ("lowr", "015"), ("feet", "001") })
+            foreach (var (slot, preferred) in new[] { ("head", isFemale ? FemaleHead : MaleHead), ("hair", "004"), ("uppr", "015"), ("lowr", "015"), ("feet", "001") })
             {
                 var model = directory.Files.FirstOrDefault(f => f.Name.StartsWith(slot + "_" + preferred + "_") && f.Name.EndsWith(".ydd"))
-                    ?? directory.Files.FirstOrDefault(f => f.Name.StartsWith(slot + "_000_") && f.Name.EndsWith(".ydd"));
+                    ?? (slot == "head" ? null : directory.Files.FirstOrDefault(f => f.Name.StartsWith(slot + "_000_") && f.Name.EndsWith(".ydd")));
                 if (model is null) throw new InvalidDataException("Missing base ped component: " + slot);
                 var index = model.Name.Split('_')[1];
                 var texture = directory.Files.FirstOrDefault(f => f.Name.StartsWith(slot + "_diff_" + index + "_a_") && f.Name.EndsWith(".ytd"));

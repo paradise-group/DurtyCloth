@@ -21,9 +21,11 @@ public static class PedSurfacePhotos
     {
         var bodySlot = category is "chestHair" or "bodyBlemishes" or "addBodyBlemishes" ? "uppr" : "head";
         var tint = category is "facialHair" or "eyebrows" or "chestHair" ? Color.FromRgb(38, 28, 23)
-            : category is "blush" or "lipstick" ? Color.FromRgb(140, 45, 55) : (Color?)null;
-        (options ?? new()).Write(destination, Render(ped, bodySlot, Overlay(image, tint), background,
-            bodySlot == "head" ? null : 0, chooseView: false));
+            : category is "blush" or "lipstick" or "makeup" ? Color.FromRgb(140, 45, 55) : (Color?)null;
+        var paletteName = category is "facialHair" or "eyebrows" or "chestHair" ? "mp_hair_tint" : "mp_makeup_tint";
+        var palette = tint is not null ? ped.OverlayPalettes?.GetValueOrDefault(paletteName) : null;
+        (options ?? new()).Write(destination, Render(ped, bodySlot, Overlay(image, tint, palette), background,
+            null, chooseView: false));
     }
 
     public static void SaveTattoo(string destination, TattooItem tattoo, BitmapSource image,
@@ -43,17 +45,17 @@ public static class PedSurfacePhotos
             || !float.IsFinite(tattoo.Rotation)) throw new InvalidDataException("Coordenadas de tatuagem inválidas.");
         var zone = Array.IndexOf(TattooExporter.Zones, tattoo.Zone);
         if (zone < 0) throw new InvalidDataException("Zona de tatuagem inválida.");
-        if (tattoo.UseTintColour) image = Overlay(image, Color.FromRgb(38, 28, 23));
+        if (tattoo.UseTintColour) image = Overlay(image, Color.FromRgb(38, 28, 23), ped.OverlayPalettes?.GetValueOrDefault("mp_hair_tint"));
         var visual = new DrawingVisual();
         using (var drawing = visual.RenderOpen())
         {
-            var center = new Point((tattoo.U - Math.Floor(tattoo.U)) * AtlasSize, tattoo.V * AtlasSize);
+            var center = new Point((tattoo.U - Math.Floor(tattoo.U)) * AtlasSize, (1 - tattoo.V) * AtlasSize);
             var width = Math.Abs(tattoo.ScaleX) * AtlasSize;
             var height = Math.Abs(tattoo.ScaleY) * AtlasSize;
             foreach (var repeat in new[] { -1, 0, 1 })
             {
                 drawing.PushTransform(new TranslateTransform(repeat * AtlasSize, 0));
-                drawing.PushTransform(new RotateTransform(tattoo.Rotation, center.X, center.Y));
+                drawing.PushTransform(new RotateTransform(-tattoo.Rotation, center.X, center.Y));
                 drawing.PushTransform(new ScaleTransform(Math.Sign(tattoo.ScaleX), Math.Sign(tattoo.ScaleY), center.X, center.Y));
                 drawing.DrawImage(image, new Rect(center.X - width / 2, center.Y - height / 2, width, height));
                 drawing.Pop(); drawing.Pop(); drawing.Pop();
@@ -64,14 +66,30 @@ public static class PedSurfacePhotos
         return Render(ped, bodySlot, atlas, background, zone, chooseView: true);
     }
 
-    public static BitmapSource Overlay(BitmapSource source, Color? tint)
+    public static BitmapSource Overlay(BitmapSource source, Color? tint, BitmapSource? palette = null)
     {
         var image = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
         var pixels = new byte[image.PixelWidth * image.PixelHeight * 4];
         image.CopyPixels(pixels, image.PixelWidth * 4, 0);
+        byte[]? ramp = null;
+        if (palette is not null)
+        {
+            var converted = new FormatConvertedBitmap(palette, PixelFormats.Bgra32, null, 0);
+            ramp = new byte[converted.PixelWidth * converted.PixelHeight * 4];
+            converted.CopyPixels(ramp, converted.PixelWidth * 4, 0);
+        }
         if (tint is Color color)
             for (var offset = 0; offset < pixels.Length; offset += 4)
             {
+                if (ramp is not null)
+                {
+                    var coordinate = Math.Clamp(pixels[offset + 1] / 255.0 * palette!.PixelWidth - 0.5, 0, palette.PixelWidth - 1);
+                    var first = (int)coordinate;
+                    var second = Math.Min(first + 1, palette.PixelWidth - 1);
+                    var mix = coordinate - first;
+                    byte Channel(int channel) => (byte)Math.Round(ramp[first * 4 + channel] * (1 - mix) + ramp[second * 4 + channel] * mix);
+                    color = Color.FromRgb(Channel(2), Channel(1), Channel(0));
+                }
                 pixels[offset] = color.B;
                 pixels[offset + 1] = color.G;
                 pixels[offset + 2] = color.R;

@@ -29,6 +29,14 @@ internal static class SurfacePhotoTests
         if (!actual.SequenceEqual(new byte[] { 23, 28, 38, 170 })) throw new Exception("Hair tint failed to preserve the alpha mask.");
         greenMask.CopyPixels(actual, 4, 0);
         if (!actual.SequenceEqual(pixels)) throw new Exception("The appearance source was modified.");
+        var ramp = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null,
+            new byte[] { 0, 0, 0, 255, 255, 255, 255, 255 }, 8);
+        var tones = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null,
+            new byte[] { 200, 0, 100, 170, 0, 255, 100, 80 }, 8);
+        var ramped = PedSurfacePhotos.Overlay(tones, Colors.Brown, ramp);
+        var rampPixels = new byte[8]; ramped.CopyPixels(rampPixels, 8, 0);
+        if (!rampPixels.SequenceEqual(new byte[] { 0, 0, 0, 170, 255, 255, 255, 80 }))
+            throw new Exception("The overlay lost its green-channel palette tones or source opacity.");
         var positions = new[] { new Point3D(-0.3, -0.3, 0), new Point3D(0.3, -0.3, 0),
             new Point3D(0.3, 0.3, 0), new Point3D(-0.3, 0.3, 0) };
         var coordinates = new[] { new Point(0, 1), new Point(1, 1), new Point(1, 0), new Point(0, 0) };
@@ -51,6 +59,24 @@ internal static class SurfacePhotoTests
         }
         if (!part.Positions.SequenceEqual(positions) || !part.TextureCoordinates.SequenceEqual(coordinates))
             throw new Exception("Surface rendering modified the original mesh.");
+        var lowerFile = Path.Combine(output, "lower-head-decal.png");
+        PedSurfacePhotos.SaveTattoo(lowerFile, new TattooItem { Zone = "ZONE_HEAD", U = 0.5f, V = 0.25f,
+            ScaleX = 0.23f, ScaleY = 0.23f }, red, ped, Colors.Gray, new PhotoImageOptions(128));
+        var lowerImage = new FormatConvertedBitmap(new BitmapImage(new Uri(lowerFile)), PixelFormats.Bgra32, null, 0);
+        var lowerPixels = new byte[128 * 128 * 4]; lowerImage.CopyPixels(lowerPixels, 128 * 4, 0);
+        var lowerRows = Enumerable.Range(0, 128 * 128).Where(index => lowerPixels[index * 4 + 2] > 2 * lowerPixels[index * 4 + 1]
+            && lowerPixels[index * 4 + 2] > 2 * lowerPixels[index * 4]).Select(index => index / 128).ToArray();
+        if (lowerRows.Length < 30 || lowerRows.Average() <= 64)
+            throw new Exception("The native lower-head position was inverted onto the forehead.");
+        var body = part with { TextureName = "__ped_uppr_test", DecorationCoordinates = Enumerable.Repeat(new Point(100, 100), 4).ToArray() };
+        var bodyPed = new PhotoPed([body], new Dictionary<string, BitmapSource> { [body.TextureName!] = white }, []);
+        var bodyFile = Path.Combine(output, "primary-body-overlay.png");
+        PedSurfacePhotos.SaveAppearance(bodyFile, "chestHair", red, bodyPed, Colors.Gray, new PhotoImageOptions(128));
+        var bodyImage = new FormatConvertedBitmap(new BitmapImage(new Uri(bodyFile)), PixelFormats.Bgra32, null, 0);
+        var bodyPixels = new byte[128 * 128 * 4]; bodyImage.CopyPixels(bodyPixels, 128 * 4, 0);
+        if (Enumerable.Range(0, 128 * 128).Count(index => bodyPixels[index * 4 + 2] > bodyPixels[index * 4 + 1] * 1.1
+            && bodyPixels[index * 4 + 2] > bodyPixels[index * 4] * 1.2) < 100)
+            throw new Exception("Body appearance was projected through the tattoo UV atlas instead of the skin UVs.");
         Console.WriteLine("PASS: skin surface application, native head UV tile, negative placement, mirrored scale, hair tint and source preservation.");
     }
 }

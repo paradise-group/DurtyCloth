@@ -72,16 +72,21 @@ internal static class HeadPhotoTests
         var detailPart = new ModelPreviewPart(backPositions, [0, 2, 1, 3, 4, 5], backCoordinates, "detail", false);
         var detailedHat = new ModelPreviewData([detailPart], 2, 2);
         var detailTextures = new Dictionary<string, BitmapSource> { ["detail"] = detailImage };
-        if (!PhotoView.ShowBack(detailedHat, detailTextures, "p_head")) throw new Exception("Hat back detail was not selected.");
-        var frontCoordinates = backCoordinates.Reverse().ToArray();
-        if (PhotoView.ShowBack(detailedHat with { Parts = [detailPart with { TextureCoordinates = frontCoordinates }] }, detailTextures, "p_head"))
-            throw new Exception("Hat front detail incorrectly selected the back view.");
-        if (!PhotoView.ShowBack(detailedHat, detailTextures, "hand")) throw new Exception("Backpack did not select the rear view.");
-        if (PhotoView.ShowBack(detailedHat, new Dictionary<string, BitmapSource> { ["detail"] = Texture(255) }, "p_head"))
-            throw new Exception("A plain hat was turned around without a distinctive rear detail.");
+        var frontHat = detailedHat with { SourceTriangles = 4, PreviewTriangles = 4 };
+        var referenceFile = Path.Combine(output, "front-hat-reference.png");
+        var hatFile = Path.Combine(output, "front-hat-rear-art.png");
+        PreviewPhotoRenderer.Save(referenceFile, frontHat, detailTextures, null, "Fixture", background, options);
+        PreviewPhotoRenderer.Save(hatFile, frontHat, detailTextures, null, "Chapéu [p_head]", background, options, Matrix3D.Identity);
+        if (!File.ReadAllBytes(referenceFile).SequenceEqual(File.ReadAllBytes(hatFile)))
+            throw new Exception("Rear artwork changed the front view of the hat.");
+        if (!PhotoView.ShowBack("hand")) throw new Exception("Backpack did not select the rear view.");
         var template = BitmapSource.Create(64, 64, 96, 96, PixelFormats.Bgra32, null, new byte[64 * 64 * 4], 256);
         if (!PhotoView.IsDecorationTemplate(template) || PhotoView.IsDecorationTemplate(Texture(255)))
             throw new Exception("Dynamic decoration template was confused with real artwork.");
+        var alphaMask = Enumerable.Range(0, 64 * 64).SelectMany(index => new byte[] { 255, 255, 255, (byte)(index % 256) }).ToArray();
+        var decodedMask = BitmapSource.Create(64, 64, 96, 96, PixelFormats.Bgra32, null, alphaMask, 256);
+        if (!PhotoView.IsDecorationTemplate(decodedMask))
+            throw new Exception("A decoded A8 runtime decoration mask was shown as a white badge.");
         Console.WriteLine("PASS: opaque masks, source alpha preservation, clean head for empty accessories and non-mutating hat alignment.");
     }
 }

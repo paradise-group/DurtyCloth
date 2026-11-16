@@ -1708,6 +1708,12 @@ public partial class MainWindow : Window
             : DDSIO.GetPixels(texture, mip);
         if (pixels is null || pixels.Length < width * height * 4)
             throw new InvalidDataException("Formato de textura ainda não suportado para prévia.");
+        if (texture.Format == TextureFormat.D3DFMT_A8)
+            for (var offset = 0; offset < pixels.Length; offset += 4)
+            {
+                pixels[offset + 3] = pixels[offset];
+                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = 255;
+            }
         var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32,
             null, pixels, width * 4);
         image.Freeze();
