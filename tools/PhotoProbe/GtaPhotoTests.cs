@@ -55,13 +55,16 @@ internal static class GtaPhotoTests
                 var texturePath = catalog.Resolve(item.TexturePaths[0]);
                 var images = (Dictionary<string, BitmapSource>)read.Invoke(null, [texturePath, model])!;
                 if (images.Count == 0) throw new Exception("GTA model has no matching diffuse textures: " + item.Name);
-                var ped = code == "hair" ? PreviewPhotoRenderer.LoadPed(game, gender) : null;
+                var isEmpty = PreviewPhotoRenderer.IsEmptySlot(model, item.Category);
+                var ped = code is "hair" or "p_head" || isEmpty ? PreviewPhotoRenderer.LoadPed(game, gender) : null;
                 var target = Path.Combine(output, item.Id + "." + item.TextureIds[0] + ".webp");
                 var session = new PhotoExportSession(output, false);
-                var saved = session.SaveImage(target, temporary => PreviewPhotoRenderer.Save(temporary, model, images, ped,
-                    item.Category, Color.FromRgb(0x62, 0x5F, 0x68), new PhotoImageOptions(512, "WebP", 85)));
+                var saved = session.SaveImage(target, temporary => PreviewPhotoRenderer.Save(temporary, model, images,
+                    code == "p_head" && !isEmpty ? null : ped, item.Category, Color.FromRgb(0x62, 0x5F, 0x68),
+                    new PhotoImageOptions(512, "WebP", 85), code == "p_head" ? ped?.Attachments[31086] : null));
                 if (session.FindExisting(target) != saved) throw new Exception("Native GTA UUID photo cannot be reused.");
                 samples.Add(new { item.Name, item.Gender, item.Category, item.Id, target, model.SourceTriangles });
+                if (code == "hair") HairPhotoTests.Run(modelPath, texturePath, Path.Combine(output, "hair", gender), gender);
             }
         }
         var report = new
@@ -72,6 +75,21 @@ internal static class GtaPhotoTests
             categories = catalog.Project.Items.GroupBy(item => item.Gender + "/" + item.Category)
                 .ToDictionary(group => group.Key, group => group.Count())
         };
+        foreach (var (filename, rear) in new[]
+        {
+            ("mp_m_freemode_01_p_mp_m_sum2^p_head_005.ydd", false),
+            ("mp_m_freemode_01_p_mp_m_sum2^p_head_007.ydd", true)
+        })
+        {
+            var hat = catalog.Project.Items.SingleOrDefault(item => item.OriginalModelFileName == filename);
+            if (hat is null) continue;
+            var ped = PreviewPhotoRenderer.LoadPed(game, hat.Gender);
+            var model = ModelPreview.Read(catalog.Resolve(hat.ModelPath), false, true);
+            var textures = (Dictionary<string, BitmapSource>)read.Invoke(null, [catalog.Resolve(hat.TexturePaths[0]), model])!;
+            var aligned = ModelPreview.AttachToBone(model, ped.Attachments[31086]);
+            if (PhotoView.ShowBack(aligned, textures, "p_head") != rear)
+                throw new Exception("Incorrect hat view for " + filename + "; plain caps must face front and the rear luminous logo must stay visible.");
+        }
         File.WriteAllText(Path.Combine(output, "gta-photo-report.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"PASS: scanned {catalog.Project.Items.Count} GTA models and {report.textures} textures; stable UUIDs match previous exports; validated identity map; six real male/female clothing, hat and hair photos rendered with complete geometry and reusable UUID names.");
     }

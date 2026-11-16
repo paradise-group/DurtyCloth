@@ -38,16 +38,48 @@ public static class PreviewPhotoRenderer
 
     public static void Save(string destination, ModelPreviewData garment,
         Dictionary<string, BitmapSource> garmentTextures, PhotoPed? ped,
-        string category, Color background, PhotoImageOptions? options = null)
-        => (options ?? new()).Write(destination, Render(garment, garmentTextures, ped, category, background));
+        string category, Color background, PhotoImageOptions? options = null, Matrix3D? standaloneAttachment = null)
+        => (options ?? new()).Write(destination, Render(garment, garmentTextures, ped, category, background, standaloneAttachment));
+
+    public static bool IsEmptySlot(ModelPreviewData model, string category)
+    {
+        var slot = category.Contains('[') ? category.Split('[').Last().TrimEnd(']') : "";
+        return (slot is "p_head" or "p_eyes" or "p_ears" or "p_mouth" or "berd" or
+            "uppr" or "lowr" or "hand" or "feet" or "teef" or "accs" or "task" or "jbib") && model.SourceTriangles <= 2;
+    }
+
+    public static void SaveEmptySlot(string destination, PhotoPed ped, string category, Color background, PhotoImageOptions? options = null)
+        => (options ?? new()).Write(destination, RenderEmptySlot(ped, category, background));
+
+    private static RenderTargetBitmap RenderEmptySlot(PhotoPed ped, string category, Color background)
+    {
+        var slot = category.Contains('[') ? category.Split('[').Last().TrimEnd(']') : category;
+        var bodySlot = slot switch
+        {
+            "p_head" or "p_eyes" or "p_ears" or "p_mouth" or "berd" or "hair" or "head" => "head",
+            "lowr" => "lowr",
+            "feet" => "feet",
+            _ => "uppr"
+        };
+        var parts = ped.Parts.Where(part => part.TextureName?.StartsWith("__ped_" + bodySlot + "_", StringComparison.Ordinal) == true).ToArray();
+        if (parts.Length == 0) throw new InvalidDataException("Ped base sem geometria para a zona " + bodySlot);
+        var triangles = parts.Sum(part => part.Indices.Length / 3);
+        return Render(new ModelPreviewData(parts, triangles, triangles), ped.Textures, null, "Body context", background);
+    }
 
     private static RenderTargetBitmap Render(ModelPreviewData garment,
         Dictionary<string, BitmapSource> garmentTextures, PhotoPed? ped,
-        string category, Color background)
+        string category, Color background, Matrix3D? standaloneAttachment = null)
     {
         var slot = category.Contains('[') ? category.Split('[').Last().TrimEnd(']') : "";
+        if (IsEmptySlot(garment, category))
+            return RenderEmptySlot(ped ?? throw new InvalidDataException("A fotografia sem acessório requer o ped base."), category, background);
+        if (slot == "decl" && garment.Parts.All(part => part.IsDecoration &&
+            garmentTextures.TryGetValue(part.TextureName ?? "__selected_diffuse", out var texture) && PhotoView.IsDecorationTemplate(texture)))
+            return RenderEmptySlot(ped ?? throw new InvalidDataException("A fotografia de decal requer o ped base."), category, background);
         if (slot == "p_head" && ped is null)
-            garment = OrientStandaloneHat(garment);
+            garment = standaloneAttachment is Matrix3D attachment ? ModelPreview.AttachToBone(garment, attachment)
+                : throw new InvalidDataException("A fotografia de chapéus requer o alinhamento do ped base.");
         if (ped is not null && ModelPreview.PropBoneTag(slot) is int boneTag)
             garment = ModelPreview.AttachToBone(garment, ped.Attachments[boneTag]);
         var focus = Bounds(garment.Parts);
@@ -66,16 +98,33 @@ public static class PreviewPhotoRenderer
             }
         }
         var itemReachesFeet = focus.CenterY - focus.SizeY / 2 < -0.85;
+        var headContext = ped is not null && (slot is "berd" or "p_eyes" or "p_ears" or "p_mouth");
         var garmentParts = slot == "hair" ? OrderHairLayers(garment.Parts) : garment.Parts;
         var bodyParts = ped is null ? [] : ped.Parts.Where(p => !p.TextureName!.StartsWith("__ped_" + slot + "_", StringComparison.Ordinal) &&
                 !p.TextureName.StartsWith("__ped_hair_", StringComparison.Ordinal) &&
+                (!headContext || p.TextureName.StartsWith("__ped_head_", StringComparison.Ordinal)) &&
                 !(slot == "teef" && itemReachesFeet && p.TextureName.StartsWith("__ped_feet_", StringComparison.Ordinal))).ToArray();
         var parts = slot == "hair" ? bodyParts.Concat(garmentParts).ToArray() : garmentParts.Concat(bodyParts).ToArray();
+        if (slot == "p_ears" && ped is not null)
+        {
+            (parts, framingParts) = FrameEar(parts, garment.Parts, bodyParts);
+            focus = Bounds(framingParts);
+        }
+        if (PhotoView.ShowBack(garment, garmentTextures, slot))
+        {
+            var rotation = new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 1, 0), 180),
+                new Point3D(focus.CenterX, focus.CenterY, focus.CenterZ));
+            ModelPreviewPart Rotate(ModelPreviewPart part) => part with { Positions = part.Positions.Select(rotation.Transform).ToArray() };
+            parts = parts.Select(Rotate).ToArray();
+            framingParts = framingParts.Select(Rotate).ToArray();
+            focus = Bounds(framingParts);
+        }
         var images = new Dictionary<string, BitmapSource>(garmentTextures, StringComparer.OrdinalIgnoreCase);
         if (ped is not null)
             foreach (var entry in ped.Textures) images[entry.Key] = entry.Value;
 
         var models = new Model3DGroup();
+        var opaqueImages = new Dictionary<BitmapSource, BitmapSource>();
         foreach (var part in parts)
         {
             if (part.Indices.Length == 0) continue;
@@ -99,11 +148,27 @@ public static class PreviewPhotoRenderer
                 part.TextureCoordinates.Length == part.Positions.Length)
             {
                 mesh.TextureCoordinates = new PointCollection(part.TextureCoordinates);
-                material = new DiffuseMaterial(new ImageBrush(image)
+                var sourceImage = image;
+                if (!part.UsesTextureAlpha)
+                {
+                    if (!opaqueImages.TryGetValue(image, out var opaque))
+                    {
+                        opaque = OpaqueTexture(image);
+                        opaqueImages[image] = opaque;
+                    }
+                    image = opaque;
+                }
+                var brush = new ImageBrush(image)
                 {
                     TileMode = TileMode.Tile, ViewportUnits = BrushMappingMode.Absolute,
                     Viewport = new Rect(0, 0, 1, 1), Stretch = Stretch.Fill
-                });
+                };
+                material = new DiffuseMaterial(brush);
+                if (part.IsEmissive)
+                {
+                    var emission = brush.Clone(); emission.ImageSource = sourceImage;
+                    material = new MaterialGroup { Children = { material, new EmissiveMaterial(emission) } };
+                }
             }
             else material = new DiffuseMaterial(new SolidColorBrush(Color.FromRgb(194, 202, 215)));
             mesh.Freeze();
@@ -117,7 +182,7 @@ public static class PreviewPhotoRenderer
         scene.Children.Add(models);
 
         // Body context scales with the actual ped, independently of the item category.
-        var contextHeight = ped is null ? 0 : Bounds(ped.Parts).SizeY * 0.30;
+        var contextHeight = ped is null || headContext ? 0 : Bounds(ped.Parts).SizeY * 0.30;
         const double fieldOfView = 40;
         const double frameUsage = 0.86; // Keep seven percent clear on each edge.
         var halfAngleTangent = Math.Tan(fieldOfView * Math.PI / 360);
@@ -143,15 +208,40 @@ public static class PreviewPhotoRenderer
         return bitmap;
     }
 
-    private static ModelPreviewData OrientStandaloneHat(ModelPreviewData garment)
+    private static BitmapSource OpaqueTexture(BitmapSource image)
     {
-        var bounds = Bounds(garment.Parts);
-        var rotation = new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 0, 1), 90),
-            new Point3D(bounds.CenterX, bounds.CenterY, bounds.CenterZ));
-        return garment with { Parts = garment.Parts.Select(part => part with
-        {
-            Positions = part.Positions.Select(rotation.Transform).ToArray()
-        }).ToArray() };
+        var pixels = new byte[checked(image.PixelWidth * image.PixelHeight * 4)];
+        image.CopyPixels(pixels, image.PixelWidth * 4, 0);
+        for (var offset = 3; offset < pixels.Length; offset += 4) pixels[offset] = 255;
+        var result = BitmapSource.Create(image.PixelWidth, image.PixelHeight, 96, 96, PixelFormats.Bgra32,
+            null, pixels, image.PixelWidth * 4);
+        result.Freeze();
+        return result;
+    }
+
+    private static (ModelPreviewPart[] Parts, ModelPreviewPart[] Framing) FrameEar(
+        ModelPreviewPart[] parts, ModelPreviewPart[] earrings, ModelPreviewPart[] head)
+    {
+        const double sideViewDegrees = 55;
+        const double headWidthRatio = 0.5;
+        const double headHeightRatio = 0.7;
+        var headBounds = Bounds(head);
+        var points = earrings.SelectMany(part => part.Positions).ToArray();
+        var side = points.Any(point => point.X > headBounds.CenterX) ? 1 : -1;
+        var visible = points.Where(point => side * (point.X - headBounds.CenterX) >= 0).ToArray();
+        if (visible.Length == 0) visible = points;
+        var rotation = new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 1, 0), -side * sideViewDegrees),
+            new Point3D(headBounds.CenterX, headBounds.CenterY, headBounds.CenterZ));
+        var aligned = parts.Select(part => part with { Positions = part.Positions.Select(rotation.Transform).ToArray() }).ToArray();
+        var selected = visible.Select(rotation.Transform).ToArray();
+        var bounds = Bounds([new ModelPreviewPart(selected, [], [], null)]);
+        var halfWidth = Math.Max(bounds.SizeX, headBounds.SizeX * headWidthRatio) / 2;
+        var halfHeight = Math.Max(bounds.SizeY, headBounds.SizeY * headHeightRatio) / 2;
+        var frame = new ModelPreviewPart([
+            new Point3D(bounds.CenterX - halfWidth, bounds.CenterY - halfHeight, bounds.CenterZ),
+            new Point3D(bounds.CenterX + halfWidth, bounds.CenterY + halfHeight, bounds.CenterZ)
+        ], [], [], null);
+        return (aligned, [frame]);
     }
 
     private static ModelPreviewPart[] OrderHairLayers(ModelPreviewPart[] parts)
@@ -159,7 +249,7 @@ public static class PreviewPhotoRenderer
         // WPF does not sort transparent hair cards. Merge matching materials so
         // cards from different geometries can be drawn together, back to front.
         // The photo camera looks down -Z; keep every vertex, UV and triangle.
-        return parts.GroupBy(part => (part.TextureName, HasUvs: part.TextureCoordinates.Length == part.Positions.Length))
+        return parts.GroupBy(part => (part.TextureName, part.UsesTextureAlpha, part.IsEmissive, part.IsDecoration, HasUvs: part.TextureCoordinates.Length == part.Positions.Length))
             .Select(group =>
             {
                 var positions = new List<Point3D>();
@@ -179,7 +269,7 @@ public static class PreviewPhotoRenderer
                 }
                 return new ModelPreviewPart(positions.ToArray(), triangles.OrderBy(triangle => triangle.Depth)
                     .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C }).ToArray(),
-                    coordinates.ToArray(), group.Key.TextureName);
+                    coordinates.ToArray(), group.Key.TextureName, group.Key.UsesTextureAlpha, group.Key.IsEmissive, group.Key.IsDecoration);
             })
             .OrderBy(part => part.Positions.Length == 0 ? 0 : part.Positions.Average(point => point.Z)).ToArray();
     }

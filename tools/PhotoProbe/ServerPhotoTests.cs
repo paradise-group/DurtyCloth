@@ -3,29 +3,9 @@ using FooxClothStudio;
 
 internal static class ServerPhotoTests
 {
-    public static void RunLive(string game, string existing, string output)
-    {
-        var server = FiveMPhotoCatalog.ReadAsync(System.IO.Path.Combine(output, "server-catalog.json")).GetAwaiter().GetResult();
-        var gta = GtaPhotoCatalog.Scan(game, System.IO.Path.Combine(output, "cache"));
-        var result = server.Filter(gta.Project);
-        var saved = System.IO.Directory.EnumerateFiles(existing, "*", System.IO.SearchOption.AllDirectories)
-            .Where(path => new[] { ".png", ".webp", ".jpg", ".jpeg" }.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant()))
-            .Select(System.IO.Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var photos = gta.Project.Items.SelectMany(item => item.TextureIds.Select(texture => item.Id + "." + texture)).Distinct().ToArray();
-        var defaults = OriginalResourceExporter.Describe(gta.Project).Entries.Select(entry =>
-            new { entry.Id, Texture = entry.Textures.FirstOrDefault(texture => texture.Index == 0 && texture.Available && !texture.Inherited) })
-            .Where(entry => entry.Texture is not null).Select(entry => entry.Id + "." + entry.Texture!.Id).Distinct().ToArray();
-        System.IO.Directory.CreateDirectory(output);
-        var report = new { result.ServerItems, result.MatchedItems, result.Textures, result.UnmatchedItems,
-            existingPhotos = photos.Count(saved.Contains), newPhotos = photos.Count(photo => !saved.Contains(photo)),
-            thumbnailCount = defaults.Length, existingThumbnails = defaults.Count(saved.Contains),
-            missingThumbnails = defaults.Count(photo => !saved.Contains(photo)) };
-        System.IO.File.WriteAllText(System.IO.Path.Combine(output, "server-filter-report.json"), JsonSerializer.Serialize(report));
-        Console.WriteLine(JsonSerializer.Serialize(report));
-    }
-
     public static void Run()
     {
+        CheckInheritedFirstTexture();
         var itemId = Guid.NewGuid();
         var firstTexture = Guid.NewGuid();
         var secondTexture = Guid.NewGuid();
@@ -74,5 +54,30 @@ internal static class ServerPhotoTests
         if (ServerPhotoCatalog.Parse(dynamicCount.RootElement).Count != 1)
             throw new Exception("Dynamic texture count above 256 was rejected.");
         Console.WriteLine("PASS: server catalog excludes unavailable GTA models and textures, preserves UUID/native texture indices and source items, and rejects partial snapshots.");
+    }
+
+    private static void CheckInheritedFirstTexture()
+    {
+        var itemId = Guid.NewGuid();
+        var ownId = Guid.NewGuid();
+        var firstId = Guid.NewGuid();
+        var native = new ClothItem
+        {
+            Id = itemId, Name = "mp_m_freemode_01^jbib_000_u", Gender = "Masculino", Category = "Blusa [jbib]",
+            ModelPath = "mp_m_freemode_01^jbib_000_u.ydd", OriginalModelFileName = "mp_m_freemode_01^jbib_000_u.ydd",
+            TexturePaths = ["mp_m_freemode_01^jbib_diff_000_a_uni.ytd", "mp_m_freemode_01^jbib_diff_000_b_uni.ytd"],
+            OriginalTextureFileNames = ["mp_m_freemode_01^jbib_diff_000_a_uni.ytd", "mp_m_freemode_01^jbib_diff_000_b_uni.ytd"],
+            TextureIds = [firstId, Guid.NewGuid()]
+        };
+        var own = new ClothItem
+        {
+            Id = itemId, Name = native.Name, Gender = native.Gender, Category = native.Category,
+            ModelPath = "custom-model.ydd", OriginalModelFileName = native.OriginalModelFileName,
+            TexturePaths = ["custom-texture.ytd"], OriginalTextureFileNames = [native.OriginalTextureFileNames[1]], TextureIds = [ownId]
+        };
+        var merged = PhotoTextureSources.Merge(own, native);
+        if (merged.ModelPath != own.ModelPath || merged.TextureIds[0] != firstId || merged.TextureIds[1] != ownId ||
+            !merged.TexturePaths[0].StartsWith("gta://") || merged.TexturePaths[1] != own.TexturePaths[0] || own.TexturePaths.Count != 1)
+            throw new Exception("Photo sources did not preserve custom models/textures while restoring the first inherited variant.");
     }
 }

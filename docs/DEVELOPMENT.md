@@ -24,13 +24,24 @@ registrado em COMPATIBILITY.md. Como a pasta original não tinha Git, o primeiro
 
 Os probes que dependem de fixtures não são testes autossuficientes de CI.
 
-Para verificar as falhas do lote de fotos de 16/11, `PhotoProbe` aceita
-`--verify-photo-failures <projeto.fcsproj> <resource> <index.jsonl> <pasta-nova> <GTA>`.
-O projeto fornece os metadados e os assets são procurados pelo nome no resource.
-A saída deve ser uma pasta nova, separada da exportação original. O teste renderiza
-as 85 entradas recuperáveis, preserva a validação estrita de tatuagens no build,
-verifica os mips BC7 de 1024 e 512 px e a geometria completa do LOD disponível.
-As quatro entradas com fontes inválidas ficam identificadas em `report.json`.
+`dotnet run --project tools/PhotoProbe/PhotoProbe.csproj -c Release` executa a
+suíte de regressão de fotografias, sem modos especiais de correção ou exportação.
+O fluxo normal de exportação alinha chapéus pelo osso da cabeça do ped do mesmo
+gênero, respeita a opacidade dos materiais e mostra a cabeça limpa nos modelos
+de reserva usados como opções sem acessório. Texturas herdadas disponíveis no
+GTA são resolvidas automaticamente, sem alterar os modelos do projeto.
+As opções vazias de roupa mostram a região correspondente do ped; brincos usam
+um enquadramento lateral aproximado da orelha. Mochilas usam a vista traseira e
+chapéus podem usar a traseira quando a textura contém o detalhe principal nessa
+face. O GTA é detetado pela configuração existente e a pasta de fotos é sempre
+escolhida no diálogo de exportação.
+
+Materiais `ped_emissive` e `ped_palette` não usam o alfa difuso como transparência:
+referências dos mantenedores do Sollumz em
+https://github.com/Sollumz/Sollumz/issues/1121 e
+https://github.com/Sollumz/Sollumz/issues/1122.
+Decals com o marcador de decoração dinâmica não contêm o desenho final nos
+arquivos do jogo; a prévia mostra o corpo sem inventar um logótipo.
 
 Exigem os projetos e assets locais referidos nos argumentos ou caminhos do programa.
 Assets GTA, caches do jogo, exportações e projetos pessoais não estão no Git.

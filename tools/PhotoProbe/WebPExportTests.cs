@@ -124,7 +124,7 @@ internal static class WebPExportTests
     private static void CheckDialog()
     {
         var type = typeof(MainWindow).Assembly.GetType("FooxClothStudio.PhotoExportOptionsWindow")!;
-        var window = (Window)Activator.CreateInstance(type)!;
+        var window = (Window)Activator.CreateInstance(type, new ClothProject())!;
         T Field<T>(string name) => (T)type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         var format = Field<ComboBox>("_format");
         var size = Field<ComboBox>("_size");

@@ -2,11 +2,12 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media.Media3D;
 using CodeWalker.GameFiles;
+using CodeWalker.Utils;
 
 namespace FooxClothStudio;
 
 public sealed record ModelPreviewPart(Point3D[] Positions, int[] Indices,
-    Point[] TextureCoordinates, string? TextureName);
+    Point[] TextureCoordinates, string? TextureName, bool UsesTextureAlpha = true, bool IsEmissive = false, bool IsDecoration = false);
 
 public sealed record ModelPreviewData(ModelPreviewPart[] Parts,
     int SourceTriangles, int PreviewTriangles);
@@ -14,6 +15,13 @@ public sealed record ModelPreviewData(ModelPreviewPart[] Parts,
 public static class ModelPreview
 {
     private const int MaxTriangles = 25_000;
+    private static readonly HashSet<uint> OpaqueShaders = new[]
+    {
+        "ped", "ped_default", "ped_default_mp", "ped_default_enveff", "ped_cloth", "ped_default_cloth",
+        "ped_enveff", "ped_nopeddamagedecals", "ped_palette", "ped_default_palette", "ped_emissive",
+        "ped_wrinkle", "ped_wrinkle_cloth", "ped_wrinkle_enveff", "ped_wrinkle_cloth_enveff", "ped_wrinkle_cs",
+        "ped_hair_spiked_noalpha", "default"
+    }.Select(JenkHash.GenHash).ToHashSet();
 
     public static ModelPreviewData Read(string path, bool normalize = true, bool preserveAllTriangles = false)
     {
@@ -113,7 +121,9 @@ public static class ModelPreview
             }
             if (indices.Count == 0) continue;
             parts.Add(new ModelPreviewPart(positions.ToArray(), indices.ToArray(),
-                uvs.ToArray(), hasUvs ? DiffuseTextureName(entry.Shader) : null));
+                uvs.ToArray(), hasUvs ? DiffuseTextureName(entry.Shader) : null,
+                UsesTextureAlpha(entry.Shader), IsEmissive(entry.Shader),
+                entry.Shader is not null && (uint)entry.Shader.Name == JenkHash.GenHash("ped_decal_decoration")));
         }
         var previewTriangles = parts.Sum(part => part.Indices.Length / 3);
         if (previewTriangles == 0)
@@ -149,6 +159,10 @@ public static class ModelPreview
         "p_rwrist" => 43810,
         _ => null
     };
+
+    private static bool IsEmissive(ShaderFX? shader) => shader is not null && (uint)shader.Name == JenkHash.GenHash("ped_emissive");
+
+    private static bool UsesTextureAlpha(ShaderFX? shader) => shader is null || !OpaqueShaders.Contains((uint)shader.Name);
 
     public static Matrix3D HeadAttachment(string headModelPath) => BoneAttachment(headModelPath, 31086);
 

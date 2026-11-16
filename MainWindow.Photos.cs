@@ -38,6 +38,13 @@ public partial class MainWindow
                 AppearanceAssets = _project.AppearanceAssets.ToList()
             };
             var projectIds = combined.Items.Select(item => item.Id).ToHashSet();
+            foreach (var native in catalog.Project.Items.Where(item => item.TexturePaths.Count > 0 && projectIds.Contains(item.Id)))
+            {
+                var position = combined.Items.FindIndex(item => item.Id == native.Id && !item.IsDummy);
+                if (position < 0) continue;
+                var original = combined.Items[position];
+                combined.Items[position] = PhotoTextureSources.Merge(original, native);
+            }
             foreach (var item in catalog.Project.Items.Where(item => !projectIds.Contains(item.Id)))
                 combined.Items.Add(new ClothItem
                 {
@@ -48,6 +55,16 @@ public partial class MainWindow
                 });
             string ResolvePhotoAsset(string path) => path.StartsWith("gta://", StringComparison.Ordinal)
                 ? catalog.Resolve(path[6..]) : AbsoluteAssetPath(path);
+            var unresolved = combined.Items.Where(item => !item.IsDummy && item.TexturePaths.Count == 0).ToList();
+            if (unresolved.Count > 0)
+            {
+                var snapshot = JsonSerializer.Deserialize<ClothProject>(JsonSerializer.Serialize(new ClothProject { Items = unresolved }))!;
+                RunWithLoading("Fotografias", "A resolver as texturas herdadas das peças...", _ => BuildDependencies.Prepare(snapshot,
+                    ResolvePhotoAsset, gameFolder, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "ParadiseClothStudio", "photo-texture-cache")));
+                foreach (var item in snapshot.Items.Where(item => item.TexturePaths.Count > 0))
+                    combined.Items[combined.Items.FindIndex(original => original.Id == item.Id)] = item;
+            }
             await ExportPreviewPhotosAsync(combined, ResolvePhotoAsset, gameFolder, catalog.WriteIdentityMap);
         }
         catch (Exception error)
@@ -111,7 +128,7 @@ public partial class MainWindow
                 if (progress.CancelRequested) break;
                 var variants = options.ExportVariants(item);
                 string DrawablePath(int variant) => Path.Combine(output, SafePhotoName(item.Gender), SafePhotoName(item.Category),
-                    item.Id.ToString("D") + "." + (variant < 0 ? "sem_textura" : item.TextureIds[variant].ToString("D")) + imageOptions.Extension);
+                    item.Id.ToString("D") + "." + (variant < 0 ? ClothingIdentityMap.InheritedTextureId(item.Id) : item.TextureIds[variant]).ToString("D") + imageOptions.Extension);
                 var existing = new Dictionary<int, string>();
                 if (!options.OverwriteExisting)
                     foreach (var variant in variants)
@@ -122,8 +139,9 @@ public partial class MainWindow
                 try { if (existing.Count != variants.Length) model = await Task.Run(() => ModelPreview.Read(resolveAsset(item.ModelPath), false, preserveAllTriangles: true)); }
                 catch (Exception ex) { modelError = ex.Message; }
                 var slot = item.Category.Contains('[') ? item.Category.Split('[').Last().TrimEnd(']') : "";
-                var needsPed = slot is "head" or "hair" or "berd" or "p_eyes" or "p_ears" or "p_mouth";
-                var gameFolder = needsPed || includePed ? configuredGameFolder : null;
+                var needsPed = slot is "head" or "hair" or "berd" or "p_eyes" or "p_ears" or "p_mouth" or "decl";
+                var isEmptySlot = model is not null && PreviewPhotoRenderer.IsEmptySlot(model, item.Category);
+                var gameFolder = needsPed || includePed || slot == "p_head" || isEmptySlot ? configuredGameFolder : null;
                 PhotoPed? ped = null;
                 string? pedError = null;
                 if (needsPed && gameFolder is null) pedError = "Configure a pasta do GTA V na janela de prévia para fotografar esta categoria com ped.";
@@ -143,14 +161,17 @@ public partial class MainWindow
                         }
                     }
                 }
+                var renderingPed = slot == "p_head" && !includePed &&
+                    !isEmptySlot ? null : ped;
+                var hatAttachment = slot == "p_head" ? ped?.Attachments[31086] : null;
                 foreach (var variant in variants)
                 {
                     if (progress.CancelRequested) break;
                     var category = SafePhotoName(item.Category);
                     var gender = SafePhotoName(item.Gender);
                     var folder = Path.Combine(output, gender, category);
-                    var textureId = variant < 0 ? (Guid?)null : item.TextureIds[variant];
-                    var name = item.Id.ToString("D") + "." + (textureId?.ToString("D") ?? "sem_textura") + imageOptions.Extension;
+                    var textureId = variant < 0 ? ClothingIdentityMap.InheritedTextureId(item.Id) : item.TextureIds[variant];
+                    var name = item.Id.ToString("D") + "." + textureId.ToString("D") + imageOptions.Extension;
                     var path = Path.Combine(folder, name);
                     try
                     {
@@ -162,7 +183,8 @@ public partial class MainWindow
                             if (variant >= 0 && !string.IsNullOrWhiteSpace(item.TexturePaths[variant]))
                                 images = await Task.Run(() => ReadMatchingTextures(resolveAsset(item.TexturePaths[variant]), model));
                             Directory.CreateDirectory(folder);
-                            path = session.SaveImage(path, temporary => PreviewPhotoRenderer.Save(temporary, model, images, ped, item.Category, photoBackground, imageOptions));
+                            path = session.SaveImage(path, temporary => PreviewPhotoRenderer.Save(temporary, model, images, renderingPed,
+                                item.Category, photoBackground, imageOptions, hatAttachment));
                         }
                         else { path = existing[variant]; reused++; }
                         if (options.OverwriteExisting || session.NeedsIndexEntry(path))
@@ -170,7 +192,8 @@ public partial class MainWindow
                                 itemId = item.Id, textureId,
                                 item.Gender, item.Category, item.SourceIndex, variant, file = Path.GetRelativePath(output, path),
                                 model = item.ModelPath, texture = variant < 0 ? null : item.TexturePaths[variant],
-                                renderMode = ped is not null || (existing.ContainsKey(variant) && gameFolder is not null) ? "base-ped" : "isolated-model" }));
+                                renderMode = isEmptySlot ? "base-ped-empty-slot" : renderingPed is not null ||
+                                    (existing.ContainsKey(variant) && (needsPed || includePed)) ? "base-ped" : "isolated-model" }));
                         written++;
                     }
                     catch (Exception ex)

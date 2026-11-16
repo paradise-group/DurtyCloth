@@ -10,7 +10,7 @@ internal static class HairPhotoTests
 {
     private readonly record struct Triangle(string? Texture, Point3D A, Point3D B, Point3D C, Point UvA, Point UvB, Point UvC);
 
-    public static void Run(string modelPath, string texturePath, string output)
+    public static void Run(string modelPath, string texturePath, string output, string gender)
     {
         Directory.CreateDirectory(output);
         var model = ModelPreview.Read(modelPath, false, preserveAllTriangles: true);
@@ -33,7 +33,9 @@ internal static class HairPhotoTests
         }
         var read = typeof(MainWindow).GetMethod("ReadMatchingTextures", BindingFlags.NonPublic | BindingFlags.Static)!;
         var textures = (Dictionary<string, BitmapSource>)read.Invoke(null, [texturePath, model])!;
-        var ped = PreviewPhotoRenderer.LoadPed("D:/Jogos/GTAV", "Masculino");
+        var game = GamePedAssets.FindGameFolder()
+            ?? throw new InvalidOperationException("Configure a instalação do GTA V antes de validar fotografias de cabelo.");
+        var ped = PreviewPhotoRenderer.LoadPed(game, gender);
         var background = Color.FromRgb(0x62, 0x5F, 0x68);
         foreach (var format in new[] { "PNG", "WebP" })
         {
