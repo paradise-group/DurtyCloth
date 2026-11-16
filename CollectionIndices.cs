@@ -26,6 +26,8 @@ public static class CollectionIndices
         return start < 0 ? "" : category[(start + 1)..].TrimEnd(']');
     }
 
+    public static int ComponentSlot(string category) => Array.IndexOf(Components, CodeOf(category));
+
     public static IOrderedEnumerable<ClothItem> Ordered(IEnumerable<ClothItem> items) =>
         items.OrderBy(item => item.ExportPosition ?? item.SourceIndex).ThenBy(item => item.Name);
 

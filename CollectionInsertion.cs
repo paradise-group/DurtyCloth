@@ -10,64 +10,97 @@ namespace FooxClothStudio;
 public sealed record PreparedCollectionInsertion(string FilesRoot, HashSet<string> ReplacedFiles,
     List<ClothingIdentityEntry> Entries, HashSet<Guid> AddedIds);
 
+public sealed record CollectionAppend(ClothItem Item, string Model, string Collection);
+
 public static class CollectionInsertion
 {
-    public static List<PreparedCollectionInsertion> Prepare(ClothProject profile, ResourceUpdatePlan plan,
-        string sourceRoot, Func<string, string> resolve, string temporary, string? gameFolder)
+    private sealed record Placement(ClothItem Item, string Model, string Collection, int Slot, int? BeforeIndex);
+
+    public static List<CollectionAppend> PlanAppends(string sourceRoot, IEnumerable<ClothItem> items)
     {
-        var requests = plan.AddedItems.Where(item => item.InsertBeforeItemId.HasValue).Select(item =>
+        var result = new List<CollectionAppend>();
+        var manifest = File.ReadAllText(Path.Combine(sourceRoot, "fxmanifest.lua"));
+        foreach (var gender in items.Where(item => CollectionIndices.ComponentSlot(item.Category) >= 0 && !HasCompanionMetadata(item))
+            .GroupBy(item => item.Gender))
+        {
+            var model = gender.Key == "Feminino" ? "mp_f_freemode_01" : "mp_m_freemode_01";
+            var collection = Regex.Matches(manifest, "'data/pcs/" + model + @"_(?<collection>mp_[mf]_pcs_[0-9a-f]{32})_shop\.meta'")
+                .Select(match => match.Groups["collection"].Value).LastOrDefault();
+            if (collection is null) continue;
+            var ymts = Directory.EnumerateFiles(Path.Combine(sourceRoot, "stream"), model + "_" + collection + ".ymt", SearchOption.AllDirectories).ToArray();
+            if (ymts.Length != 1) continue;
+            var metadata = ReadYmt(ymts[0]);
+            if (gender.GroupBy(item => CollectionIndices.ComponentSlot(item.Category))
+                .Any(slot => DrawableCount(metadata, slot.Key) + slot.Count() > CollectionIndices.DrawablesPerSlot))
+                continue;
+            result.AddRange(gender.Select(item => new CollectionAppend(item, model, collection)));
+        }
+        return result;
+    }
+
+    public static List<PreparedCollectionInsertion> Prepare(ClothProject profile, ResourceUpdatePlan plan,
+        string sourceRoot, Func<string, string> resolve, string temporary, string? gameFolder,
+        IReadOnlyList<CollectionAppend>? appends = null)
+    {
+        var insertions = plan.AddedItems.Where(item => item.InsertBeforeItemId.HasValue).Select(item =>
         {
             var target = plan.OriginalIdentities.Entries.SingleOrDefault(entry => entry.Id == item.InsertBeforeItemId)
                 ?? throw new InvalidDataException("Insertion target is not an existing resource item: " + item.Name);
             if (!target.Available || target.Kind != "component" || item.Gender != target.Gender
                 || CollectionIndices.CodeOf(item.Category) != CollectionIndices.CodeOf(plan.Original.Items.Single(original => original.Id == target.Id).Category))
                 throw new InvalidDataException("Insertion requires an existing component of the same gender and drawable type.");
-            return (Item: item, Target: target);
+            return new Placement(item, target.Model, target.Collection, target.Slot, target.Index);
         }).ToArray();
-        if (requests.Length > 0 && !profile.UsePermanentClothingIds)
+        if (insertions.Length > 0 && !profile.UsePermanentClothingIds)
             throw new InvalidDataException("Enable 'Use permanent IDs in scripts' before shifting existing native indices.");
+        var placements = insertions.Concat((appends ?? []).Select(append => new Placement(append.Item, append.Model,
+            append.Collection, CollectionIndices.ComponentSlot(append.Item.Category), null)));
         var result = new List<PreparedCollectionInsertion>();
-        foreach (var collection in requests.GroupBy(request => (request.Target.Model, request.Target.Collection)))
+        foreach (var collection in placements.GroupBy(placement => (placement.Model, placement.Collection)))
             result.Add(PrepareCollection(profile, plan, sourceRoot, resolve, temporary, gameFolder, collection.ToArray()));
         return result;
     }
 
     private static PreparedCollectionInsertion PrepareCollection(ClothProject profile, ResourceUpdatePlan plan,
-        string sourceRoot, Func<string, string> resolve, string temporary, string? gameFolder,
-        (ClothItem Item, ClothingIdentityEntry Target)[] requests)
+        string sourceRoot, Func<string, string> resolve, string temporary, string? gameFolder, Placement[] placements)
     {
-        var target = requests[0].Target;
-        var fullName = target.Model + "_" + target.Collection;
+        var model = placements[0].Model;
+        var collection = placements[0].Collection;
+        var fullName = model + "_" + collection;
         var ymts = Directory.EnumerateFiles(Path.Combine(sourceRoot, "stream"), fullName + ".ymt", SearchOption.AllDirectories).ToArray();
         if (ymts.Length != 1)
             throw new InvalidDataException("Insertion requires the collection YMT inside this resource: " + fullName + ".ymt. Select an addon collection, not a GTA replacement without metadata.");
         var metadata = ReadYmt(ymts[0]);
-        if (metadata.Root?.Name != "CPedVariationInfo" || metadata.Root.Attribute("name")?.Value != target.Collection)
+        if (metadata.Root?.Name != "CPedVariationInfo" || metadata.Root.Attribute("name")?.Value != collection)
             throw new InvalidDataException("The resource YMT does not identify the target collection.");
         if (metadata.Root.Element("aSelectionSets")?.Elements().Any() == true)
             throw new InvalidDataException("Insertion into a collection with native selection sets needs explicit selection-set remapping.");
-        var root = Path.Combine(temporary, "insert_" + requests[0].Item.Id.ToString("N"));
+        var ymtRelative = Path.GetRelativePath(sourceRoot, ymts[0]);
+        var addedFolder = placements.All(placement => placement.BeforeIndex is null)
+            ? Path.GetDirectoryName(ymtRelative)! : Path.Combine("stream", "pcs_insertions");
+        var root = Path.Combine(temporary, "insert_" + placements[0].Item.Id.ToString("N"));
         var filesRoot = Path.Combine(root, "files");
         Directory.CreateDirectory(filesRoot);
         var replaced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var entries = plan.OriginalIdentities.Entries.Where(entry => entry.Model == target.Model && entry.Collection == target.Collection).ToList();
+        var entries = plan.OriginalIdentities.Entries.Where(entry => entry.Model == model && entry.Collection == collection).ToList();
         var addedEntries = new List<ClothingIdentityEntry>();
         var maps = new Dictionary<int, Func<int, int>>();
         var generatedShops = new List<XElement>();
-        foreach (var group in requests.GroupBy(request => request.Target.Slot))
+        foreach (var group in placements.GroupBy(placement => placement.Slot))
         {
             var slot = group.Key;
             var code = CollectionIndices.CodeOf(group.First().Item.Category);
-            var ordered = group.OrderBy(request => request.Target.Index).ThenBy(request => request.Item.ExportPosition ?? request.Item.SourceIndex).ThenBy(request => request.Item.Id).ToArray();
-            var drawables = Drawables(metadata, slot);
+            var drawables = group.All(placement => placement.BeforeIndex is null) ? EnsureDrawables(metadata, slot) : Drawables(metadata, slot);
             var oldCount = drawables.Elements("Item").Count();
+            int Before(Placement placement) => placement.BeforeIndex ?? oldCount;
+            var ordered = group.OrderBy(Before).ThenBy(placement => placement.Item.ExportPosition ?? placement.Item.SourceIndex).ThenBy(placement => placement.Item.Id).ToArray();
             if (oldCount + ordered.Length > CollectionIndices.DrawablesPerSlot)
-                throw new InvalidDataException($"Collection {target.Collection}, slot {slot}: insertion exceeds native drawable capacity. Choose a collection with free capacity.");
-            if (ordered.Any(request => request.Target.Index < 0 || request.Target.Index >= oldCount))
+                throw new InvalidDataException($"Collection {collection}, slot {slot}: insertion exceeds native drawable capacity. Choose a collection with free capacity.");
+            if (ordered.Any(placement => placement.BeforeIndex is int before && (before < 0 || before >= oldCount)))
                 throw new InvalidDataException("Insertion target is outside the drawable count declared by its YMT.");
-            int MapIndex(int index) => index == byte.MaxValue ? index : checked(index + ordered.Count(request => request.Target.Index <= index));
+            int MapIndex(int index) => index == byte.MaxValue ? index : checked(index + ordered.Count(placement => placement.BeforeIndex is int before && before <= index));
             maps.Add(slot, MapIndex);
-            var firstIndex = ordered[0].Target.Index;
+            var firstIndex = Before(ordered[0]);
             string Rename(string name) => RenameAsset(name, fullName, code, MapIndex);
             var nativeFiles = Directory.EnumerateFiles(Path.Combine(sourceRoot, "stream"), "*", SearchOption.AllDirectories)
                 .Where(path => AssetIndex(Path.GetFileName(path), fullName, code) is int index && index >= firstIndex)
@@ -80,7 +113,7 @@ public static class CollectionInsertion
                 var nativeIndex = AssetIndex(names.Key!, fullName, code)!.Value;
                 if (nativeIndex >= oldCount)
                     throw new InvalidDataException("Source asset is outside the collection YMT: " + names.Key);
-                Stage(filesRoot, Path.Combine("stream", "pcs_insertions", Rename(names.Key!)), File.ReadAllBytes(paths[0]));
+                Stage(filesRoot, Path.Combine(addedFolder, Rename(names.Key!)), File.ReadAllBytes(paths[0]));
                 foreach (var path in paths) replaced.Add(Path.GetRelativePath(sourceRoot, path));
             }
             entries = entries.Select(entry => entry.Kind == "component" && entry.Slot == slot
@@ -92,8 +125,8 @@ public static class CollectionInsertion
                     SetValue(info, "pedXml_drawblIdx", MapIndex(Value(info, "pedXml_drawblIdx")));
             for (var added = 0; added < ordered.Length; added++)
             {
-                var index = ordered[added].Target.Index + added;
-                var generated = Generate(profile, ordered[added].Item, target, resolve, root, gameFolder);
+                var index = Before(ordered[added]) + added;
+                var generated = Generate(profile, ordered[added].Item, collection, resolve, root, gameFolder);
                 var definition = ReadYmt(Path.Combine(generated, "stream", fullName + ".ymt"));
                 var drawable = new XElement(Drawables(definition, slot).Elements("Item").Single());
                 var current = drawables.Elements("Item").ElementAtOrDefault(index);
@@ -108,14 +141,17 @@ public static class CollectionInsertion
                     else
                     {
                         var previousInfo = infos.Elements("Item").LastOrDefault(existing => Value(existing, "pedXml_compIdx") == slot);
-                        if (previousInfo is not null) previousInfo.AddAfterSelf(insertedInfo); else infos.Add(insertedInfo);
+                        var followingInfo = infos.Elements("Item").FirstOrDefault(existing => Value(existing, "pedXml_compIdx") > slot);
+                        if (previousInfo is not null) previousInfo.AddAfterSelf(insertedInfo);
+                        else if (followingInfo is not null) followingInfo.AddBeforeSelf(insertedInfo);
+                        else infos.Add(insertedInfo);
                     }
                 }
                 string AddedName(string name) => RenameAsset(name, fullName, code, _ => index);
                 foreach (var file in Directory.EnumerateFiles(Path.Combine(generated, "stream"), "*", SearchOption.AllDirectories))
                 {
                     if (Path.GetExtension(file).Equals(".ymt", StringComparison.OrdinalIgnoreCase)) continue;
-                    Stage(filesRoot, Path.Combine("stream", "pcs_insertions", AddedName(Path.GetFileName(file))), File.ReadAllBytes(file));
+                    Stage(filesRoot, Path.Combine(addedFolder, AddedName(Path.GetFileName(file))), File.ReadAllBytes(file));
                 }
                 var identity = ClothingIdentityMap.Read(Path.Combine(generated, ClothingIdentityMap.FileName)).Entries.Single();
                 addedEntries.Add(identity with { Index = index, ModelFile = AddedName(identity.ModelFile!),
@@ -132,8 +168,7 @@ public static class CollectionInsertion
             }
             SetValue(drawables.Parent!, "numAvailTex", drawables.Elements("Item").Sum(item => item.Element("aTexData")?.Elements("Item").Count() ?? 0) & byte.MaxValue);
         }
-        RewriteShopMetadata(sourceRoot, target, maps, generatedShops, filesRoot, replaced);
-        var ymtRelative = Path.GetRelativePath(sourceRoot, ymts[0]);
+        RewriteShopMetadata(sourceRoot, model, collection, maps, generatedShops, filesRoot, replaced);
         var xml = new XmlDocument();
         xml.LoadXml(metadata.ToString());
         var bytes = ResourceBuilder.Build(XmlMeta.GetMeta(xml), 2);
@@ -143,20 +178,23 @@ public static class CollectionInsertion
         foreach (var slot in maps.Keys)
             if (Drawables(reread, slot).Elements("Item").Count() != Drawables(metadata, slot).Elements("Item").Count())
                 throw new InvalidDataException("Inserted YMT did not pass metadata round-trip validation.");
-        return new(filesRoot, replaced, entries.Concat(addedEntries).ToList(), requests.Select(request => request.Item.Id).ToHashSet());
+        return new(filesRoot, replaced, entries.Concat(addedEntries).ToList(), placements.Select(placement => placement.Item.Id).ToHashSet());
     }
 
-    private static string Generate(ClothProject profile, ClothItem item, ClothingIdentityEntry target,
+    private static bool HasCompanionMetadata(ClothItem item) =>
+        item.HasFirstPersonModel || item.TextureEffects.Any(effect => !string.IsNullOrWhiteSpace(effect.TimeCycleModifier))
+        || !string.IsNullOrWhiteSpace(item.FirstPersonMaskModel) || item.HeelHeight != 0 || item.HairOption != "Show hairs" || item.HoodieHairs;
+
+    private static string Generate(ClothProject profile, ClothItem item, string collection,
         Func<string, string> resolve, string temporary, string? gameFolder)
     {
-        if (item.HasFirstPersonModel || item.TextureEffects.Any(effect => !string.IsNullOrWhiteSpace(effect.TimeCycleModifier))
-            || !string.IsNullOrWhiteSpace(item.FirstPersonMaskModel) || item.HeelHeight != 0 || item.HairOption != "Show hairs" || item.HoodieHairs)
+        if (HasCompanionMetadata(item))
             throw new InvalidDataException("Native insertion of clothing with first-person, hair or heel metadata needs companion-metadata remapping.");
         var project = new ClothProject
         {
             Name = "pcs_insert", DlcName = "pcs_insert", UsePermanentClothingIds = true, Items = [item],
             ReplaceDlcCollection = true, ReplacementResource = "pcs_insert_" + item.Id.ToString("N"),
-            ReplacementMaleCollection = target.Collection, ReplacementFemaleCollection = target.Collection,
+            ReplacementMaleCollection = collection, ReplacementFemaleCollection = collection,
             TargetGameBuild = profile.TargetGameBuild
         };
         var errors = BuildDependencies.Prepare(project, resolve, gameFolder);
@@ -164,17 +202,17 @@ public static class CollectionInsertion
         return AddonExporter.Export(project, resolve, temporary);
     }
 
-    private static void RewriteShopMetadata(string sourceRoot, ClothingIdentityEntry target,
+    private static void RewriteShopMetadata(string sourceRoot, string model, string collection,
         Dictionary<int, Func<int, int>> maps, List<XElement> additions, string filesRoot, HashSet<string> replaced)
     {
         var found = false;
         foreach (var path in Directory.EnumerateFiles(sourceRoot, "*.meta", SearchOption.AllDirectories))
         {
             var content = File.ReadAllText(path);
-            if (!content.Contains(target.Collection, StringComparison.Ordinal)) continue;
+            if (!content.Contains(collection, StringComparison.Ordinal)) continue;
             var document = XDocument.Parse(content);
             var shop = document.Root;
-            if (shop?.Name != "ShopPedApparel" || shop.Element("pedName")?.Value != target.Model || shop.Element("dlcName")?.Value != target.Collection)
+            if (shop?.Name != "ShopPedApparel" || shop.Element("pedName")?.Value != model || shop.Element("dlcName")?.Value != collection)
                 throw new InvalidDataException("Insertion needs remapping of related metadata before this collection can be changed: " + Path.GetFileName(path));
             if (found || shop.Element("pedOutfits")?.Elements().Any() == true)
                 throw new InvalidDataException("Insertion requires one shop metadata file without embedded outfits.");
@@ -222,10 +260,41 @@ public static class CollectionInsertion
 
     public static XElement Drawables(XDocument document, int slot)
     {
-        var available = (document.Root!.Element("availComp")?.Value ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray();
+        var available = AvailableComponents(document);
         if (slot < 0 || slot >= available.Length || available[slot] == byte.MaxValue)
             throw new InvalidDataException("Target component is not present in the collection YMT.");
-        return document.Root.Element("aComponentData3")!.Elements("Item").ElementAt(available[slot]).Element("aDrawblData3")!;
+        return document.Root!.Element("aComponentData3")!.Elements("Item").ElementAt(available[slot]).Element("aDrawblData3")!;
+    }
+
+    private static int[] AvailableComponents(XDocument document) => (document.Root!.Element("availComp")?.Value ?? "")
+        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray();
+
+    private static int DrawableCount(XDocument document, int slot)
+    {
+        var available = AvailableComponents(document);
+        return slot < 0 || slot >= available.Length || available[slot] == byte.MaxValue ? 0 : Drawables(document, slot).Elements("Item").Count();
+    }
+
+    private static XElement EnsureDrawables(XDocument document, int slot)
+    {
+        var available = AvailableComponents(document);
+        if (slot < 0 || slot >= available.Length)
+            throw new InvalidDataException("Target component is not present in the collection YMT.");
+        if (available[slot] != byte.MaxValue) return Drawables(document, slot);
+        var present = available.Where(index => index != byte.MaxValue).ToArray();
+        if (!present.SequenceEqual(Enumerable.Range(0, present.Length)))
+            throw new InvalidDataException("Adding a component to a collection YMT needs its component data in slot order.");
+        var position = available.Take(slot).Count(index => index != byte.MaxValue);
+        var component = new XElement("Item", new XElement("numAvailTex", new XAttribute("value", 0)),
+            new XElement("aDrawblData3", new XAttribute("itemType", "CPVDrawblData")));
+        var components = document.Root!.Element("aComponentData3")!;
+        var following = components.Elements("Item").ElementAtOrDefault(position);
+        if (following is null) components.Add(component); else following.AddBeforeSelf(component);
+        for (var other = slot + 1; other < available.Length; other++)
+            if (available[other] != byte.MaxValue) available[other]++;
+        available[slot] = position;
+        document.Root.Element("availComp")!.Value = string.Join(" ", available);
+        return component.Element("aDrawblData3")!;
     }
 
     private static int? AssetIndex(string name, string fullName, string code)

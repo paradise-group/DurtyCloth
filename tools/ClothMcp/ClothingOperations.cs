@@ -143,14 +143,16 @@ public static class ClothingOperations
     }
 
     public static async Task<object> PrepareUpdate(string resourceRoot, string packageRoot, string outputParent,
-        string? gameFolder = null, CancellationToken cancellationToken = default, IProgress<string>? progress = null)
+        string? gameFolder = null, CancellationToken cancellationToken = default, IProgress<string>? progress = null,
+        bool appendToLatestCollection = true)
     {
         await BuildGate.WaitAsync(cancellationToken);
-        try { return await Task.Run(() => Build(resourceRoot, packageRoot, outputParent, gameFolder, cancellationToken, progress), cancellationToken); }
+        try { return await Task.Run(() => Build(resourceRoot, packageRoot, outputParent, gameFolder, appendToLatestCollection, cancellationToken, progress), cancellationToken); }
         finally { BuildGate.Release(); }
     }
 
-    private static object Build(string resourceRoot, string packageRoot, string outputParent, string? gameFolder, CancellationToken cancellationToken, IProgress<string>? progress)
+    private static object Build(string resourceRoot, string packageRoot, string outputParent, string? gameFolder,
+        bool appendToLatestCollection, CancellationToken cancellationToken, IProgress<string>? progress)
     {
         resourceRoot = Path.GetFullPath(resourceRoot);
         packageRoot = Path.GetFullPath(packageRoot);
@@ -184,7 +186,7 @@ public static class ClothingOperations
         {
             // The existing exporter owns rollback and verifies all copied original files by SHA-256.
             var output = ResourceUpdateExporter.Export(project, Path.GetFullPath, resourceRoot, outputParent,
-                new BuildProgress(progress), gameFolder ?? GamePedAssets.FindGameFolder());
+                new BuildProgress(progress), gameFolder ?? GamePedAssets.FindGameFolder(), appendToLatestCollection);
             var map = ClothingIdentityMap.Read(Path.Combine(output, ClothingIdentityMap.FileName));
             foreach (var entry in original.Entries)
                 if (JsonSerializer.Serialize(map.Entries.Single(current => current.Id == entry.Id)) != JsonSerializer.Serialize(entry))
@@ -195,14 +197,16 @@ public static class ClothingOperations
             if (newErrors.Length > 0) throw new InvalidDataException(string.Join("\n", newErrors));
             var addedIds = package.Items.Select(item => item.Id).ToHashSet();
             var added = map.Entries.Where(entry => addedIds.Contains(entry.Id)).ToArray();
+            var originalCollections = original.Entries.Select(entry => (entry.Model, entry.Collection)).ToHashSet();
+            object[] Collections(bool existing) => added.Where(entry => originalCollections.Contains((entry.Model, entry.Collection)) == existing)
+                .GroupBy(entry => new { entry.Collection, entry.Gender }).OrderBy(group => group.Key.Collection, StringComparer.Ordinal)
+                .Select(group => (object)new { collection = group.Key.Collection, gender = group.Key.Gender, items = group.Count() }).ToArray();
             if (added.Length != package.Items.Count || map.Entries.Count != original.Entries.Count + added.Length)
                 throw new InvalidDataException("The output identity count does not match the planned update.");
             var report = new { sourceRoot = resourceRoot, packageRoot, output, originalItems = original.Entries.Count,
                 addedItems = added.Length, addedTextureFiles = package.Textures, originalIdsAndAddressesPreserved = true,
                 originalFilesHashVerified = true, baselineValidationErrors = baseline.Errors, validation,
-                addedCollections = added.GroupBy(entry => new { entry.Collection, entry.Gender })
-                    .OrderBy(group => group.Key.Collection, StringComparer.Ordinal)
-                    .Select(group => new { collection = group.Key.Collection, gender = group.Key.Gender, items = group.Count() }).ToArray(),
+                addedCollections = Collections(false), appendedCollections = Collections(true),
                 additions = added, deployment = "Prepared only. Faction wardrobe configuration and in-game testing are separate steps." };
             var reportPath = Path.Combine(outputParent, "update-report.json");
             File.WriteAllText(reportPath, JsonSerializer.Serialize(report, JsonOptions));

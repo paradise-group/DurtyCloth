@@ -25,7 +25,7 @@ public static class ResourceUpdateExporter
     }
 
     public static string Export(ClothProject project, Func<string, string> resolve, string sourceRoot, string parent,
-        IProgress<string>? progress = null, string? gameFolder = null)
+        IProgress<string>? progress = null, string? gameFolder = null, bool appendToLatestCollection = false)
     {
         var source = FiveMResource.Open(sourceRoot);
         var plan = Plan(project, resolve, source.Root, progress);
@@ -42,9 +42,12 @@ public static class ResourceUpdateExporter
         string? createdOutput = null;
         try
         {
-            progress?.Report("Preparing explicit insertions into existing addon collections...");
-            var insertions = CollectionInsertion.Prepare(project, plan, source.Root, resolve, temporary, gameFolder);
-            var exports = BuildAdditions(project, plan.AddedItems.Where(item => item.InsertBeforeItemId is null).ToList(), resolve, temporary, gameFolder, progress);
+            var pending = plan.AddedItems.Where(item => item.InsertBeforeItemId is null).ToList();
+            var appends = appendToLatestCollection ? CollectionInsertion.PlanAppends(source.Root, pending) : [];
+            var appendedIds = appends.Select(append => append.Item.Id).ToHashSet();
+            progress?.Report("Preparing additions to existing addon collections...");
+            var insertions = CollectionInsertion.Prepare(project, plan, source.Root, resolve, temporary, gameFolder, appends);
+            var exports = BuildAdditions(project, pending.Where(item => !appendedIds.Contains(item.Id)).ToList(), resolve, temporary, gameFolder, progress);
             var combined = plan.OriginalIdentities.Entries.ToDictionary(entry => entry.Id);
             foreach (var insertion in insertions)
                 foreach (var entry in insertion.Entries) combined[entry.Id] = entry;
@@ -59,7 +62,7 @@ public static class ResourceUpdateExporter
             var manifest = Path.Combine(output, "fxmanifest.lua");
             foreach (var insertion in insertions)
             {
-                progress?.Report("Applying native index shifts and updated collection metadata...");
+                progress?.Report("Applying updated collection metadata and native files...");
                 CollectionInsertion.Apply(insertion, output);
             }
             const string metadataDeclaration = "files { 'data/pcs/*' }";
@@ -76,10 +79,11 @@ public static class ResourceUpdateExporter
                 File.AppendAllText(manifest, "\nfiles { 'clothing-identities.json' }\nclient_script 'clothing-ids.client.lua'\n");
             File.WriteAllText(Path.Combine(output, "ORIGINAL-LAYOUT.txt"),
                 "Original collections are retained. Explicit insert-before operations shift only the requested addon components and update their YMT, shop metadata, native filenames and identity map.\n" +
+                "Appends add components after the last native index of the latest pcs collection of each gender, without shifting any index.\n" +
                 "Other additions are generated in separate collections inside this same resource.\n" +
                 "Existing item and texture UUIDs are retained, including shifted items.\n" +
                 "clothing-identities.json combines the original and added item/texture UUIDs.\n" +
-                $"Original items: {plan.OriginalIdentities.Entries.Count}; added items: {plan.AddedItems.Count}; native insertions: {insertions.Sum(insertion => insertion.AddedIds.Count)}.\n");
+                $"Original items: {plan.OriginalIdentities.Entries.Count}; added items: {plan.AddedItems.Count}; native insertions: {insertions.Sum(insertion => insertion.AddedIds.Count) - appends.Count}; appended: {appends.Count}.\n");
             project.SourceResourceRoot = source.Root;
             return output;
         }

@@ -34,7 +34,7 @@ Evite `dotnet run` na configuração stdio, pois mensagens de compilação usam 
 | `inspect_clothing_package` | `packageRoot` | Modelos, YTD/YLD, gênero, peças e impedimentos à importação |
 | `inspect_clothing_resource` | `resourceRoot`, `search`, `offset`, `limit` | Contagens e página de peças com collection, slot, índice e UUID |
 | `validate_clothing_resource` | `resourceRoot` | Diagnósticos estáticos de metadados e mapa de UUID |
-| `prepare_clothing_update` | `resourceRoot`, `packageRoot`, `outputParent`, `gameFolder` opcional | Cópia atualizada, projeto e relatório das adições |
+| `prepare_clothing_update` | `resourceRoot`, `packageRoot`, `outputParent`, `gameFolder` e `appendToLatestCollection` opcionais | Cópia atualizada, projeto e relatório das adições |
 | `export_clothing_photos` | `resourceRoot`, `itemIds`, `outputRoot`, `gameFolder` opcional | WebP 512 px por variante, com caminhos UUID para nations3 e manifesto SHA-256 |
 
 Extraia `.rar`/`.zip` antes de passar a pasta. O MCP não executa arquivos do pacote.
@@ -49,13 +49,26 @@ sem associação impedem a preparação. Os binários YDD/YTD/YLD são lidos ant
 criar a saída. Peças sem YTD precisam de um pacote com as dependências resolvidas.
 
 `outputParent` deve ser uma pasta **nova**, fora dos dois diretórios de entrada.
-O exportador copia o recurso completo, confere SHA-256 e acrescenta coleções novas
+O exportador copia o recurso completo, confere SHA-256 e acrescenta as roupas
 no mesmo recurso. Mantém UUIDs, coleções e índices nativos das peças existentes;
 não oferece inserção antes de peças publicadas nem substituição por este MCP.
-Peças sem prefixo de coleção de origem antes de `^` são agrupadas apenas por
-gênero: uma coleção nova por gênero por atualização. Categoria/slot não divide
-coleções; componentes e props compartilham a mesma. Uma divisão adicional só
-ocorre ao exceder 128 drawables em algum slot (`CollectionIndices.DrawablesPerSlot`).
+
+Por padrão (`appendToLatestCollection` = `true`), os componentes entram **no fim**
+da última coleção `pcs` de cada gênero — a última declarada em `data/pcs` no
+`fxmanifest.lua` — depois do último índice nativo de cada slot. Nenhum índice
+existente muda e nenhuma coleção é criada: o `.ymt` e o `_shop.meta` dessa coleção
+são reescritos somente com os acréscimos, e um slot que a coleção ainda não tinha
+é criado nela. Uma coleção nova por gênero só é aberta quando:
+
+- o gênero ainda não tem coleção `pcs` no recurso;
+- algum slot passaria de 128 drawables (`CollectionIndices.DrawablesPerSlot`); nesse
+  caso todas as peças daquele gênero vão juntas para a coleção nova;
+- a peça é um prop ou tem metadados de primeira pessoa, cabelo ou salto, que o
+  acréscimo nativo não remapeia.
+
+Com `appendToLatestCollection` = `false`, toda atualização cria uma coleção nova
+por gênero, como antes. Em coleções novas, categoria/slot não divide coleções;
+componentes e props compartilham a mesma.
 A repetição do mesmo pacote no recurso já atualizado é rejeitada pelos UUIDs.
 
 A preparação pode copiar dezenas de GB. Configure um tempo de execução adequado
@@ -68,9 +81,9 @@ A saída contém:
 
 - `<nome-do-recurso>/`: recurso FiveM com arquivos originais e roupas novas.
 - `update-report.json`: origem, contagens, verificações, problemas preexistentes,
-  e cada roupa/textura adicionada com UUID, collection e índice local. O array
-  `addedCollections`, no nível superior, lista cada coleção nova como
-  `{ "collection", "gender", "items" }`.
+  e cada roupa/textura adicionada com UUID, collection e índice local. No nível
+  superior, `addedCollections` lista cada coleção nova e `appendedCollections`
+  cada coleção existente que recebeu peças, como `{ "collection", "gender", "items" }`.
 - `update.fcsproj`: projeto para abrir no Studio, com referências absolutas aos
   assets originais e ao pacote extraído. Salve pela interface para copiar os assets
   para um projeto portátil antes de mover ou apagar essas pastas.
@@ -103,10 +116,13 @@ Não registra fotos automaticamente no servidor nem publica na CDN.
 
 ## Antes de aplicar uma atualização preparada ao recurso do servidor
 
-- Confira se `addedCollections` tem tantas entradas quanto gêneros no pacote;
-  mais coleções só são válidas quando algum slot excede 128 drawables.
+- Confira `addedCollections`: vazio quando o gênero já tem coleção `pcs` com espaço;
+  no máximo uma entrada por gênero do pacote nos casos listados acima.
 - Confira se as quantidades de `.ymt` de coleção e `_shop.meta` adicionados
   correspondem à quantidade de entradas em `addedCollections`.
+- Para cada entrada de `appendedCollections`, compare o `.ymt` e o `_shop.meta`
+  com a origem: os drawables e itens existentes devem continuar idênticos, e os
+  novos índices devem continuar a partir do último de cada slot.
 - Confira se `files { 'data/pcs/*' }` aparece uma única vez no manifesto.
 - Compare com a origem: quantidade de entradas originais, coleções, índices e
   UUIDs de peças/texturas devem ser preservados.
