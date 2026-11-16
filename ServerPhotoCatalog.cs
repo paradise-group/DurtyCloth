@@ -45,7 +45,7 @@ public sealed class ServerPhotoCatalog
         return catalog;
     }
 
-    public ServerPhotoFilterResult Filter(ClothProject project)
+    public ServerPhotoFilterResult Filter(ClothProject project, bool firstTextureOnly = true)
     {
         var map = OriginalResourceExporter.Describe(project).Entries.ToDictionary(entry => entry.Id);
         var selected = new List<ClothItem>();
@@ -55,9 +55,10 @@ public sealed class ServerPhotoCatalog
             var entry = map[item.Id];
             var address = Address(entry.Model, entry.Kind, entry.Slot, entry.Collection, entry.Index);
             if (!_entries.TryGetValue(address, out var allowed)) continue;
-            var indices = entry.Textures.Where(texture => !texture.Inherited && allowed.Contains(texture.Index))
-                .OrderBy(texture => texture.Index).ThenBy(texture => texture.AliasOf is not null)
-                .Take(1).Select(texture => texture.Id).ToHashSet();
+            var available = entry.Textures.Where(texture => !texture.Inherited && allowed.Contains(texture.Index))
+                .OrderBy(texture => texture.Index).ThenBy(texture => texture.AliasOf is not null);
+            var chosen = firstTextureOnly ? available.Take(1) : available;
+            var indices = chosen.Select(texture => texture.Id).ToHashSet();
             var positions = Enumerable.Range(0, item.TextureIds.Count).Where(index => indices.Contains(item.TextureIds[index])).ToArray();
             if (positions.Length == 0) continue;
             selected.Add(new ClothItem

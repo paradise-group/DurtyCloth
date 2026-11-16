@@ -19,9 +19,11 @@ as peças do pack que já têm o mesmo UUID, sem alterar o projeto aberto.
 Na janela seguinte, escolha categorias, géneros e opções da imagem. Pode usar a
 mesma pasta das fotos do pack: **Ignorar fotografias com o mesmo UUID** é a opção
 por defeito. **Substituir** troca apenas as fotografias selecionadas que já existem.
-É guardada apenas uma fotografia por peça, usando a primeira textura disponível;
-não são exportadas todas as cores. As fotografias de outras cores já existentes
-na pasta são preservadas.
+Em **Modo de exportação**, escolha **Só a primeira textura de cada peça** (por
+defeito) ou **Todas as texturas de cada peça**. O modo escolhido determina também
+o total mostrado no progresso e a cobertura pedida pelo preparador da CDN.
+As fotografias de outras cores já existentes na pasta são preservadas em ambos
+os modos; a política de ignorar/substituir UUIDs é independente.
 Também é possível cancelar e voltar a executar a exportação, aproveitando as fotos
 guardadas. Os arquivos do GTA são apenas lidos; os assets necessários são extraídos
 para uma cache separada.

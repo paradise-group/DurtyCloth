@@ -89,6 +89,14 @@ internal static class PhotoResumeTests
         Options("_appearanceKinds")["Olhos"].IsChecked = false;
         Check(!(bool)Invoke("IncludesTattoo", tattoo)! && !(bool)Invoke("IncludesAppearance", eyes)!, "Tattoo and appearance can be excluded");
         Check(!(bool)type.GetProperty("OverwriteExisting")!.GetValue(dialog)!, "Default is skip");
+        var multiTexture = new ClothItem { TexturePaths = ["a.ytd", "b.ytd", "c.ytd"] };
+        Check(!(bool)type.GetProperty("ExportAllTextures")!.GetValue(dialog)!, "Default mode is one photo per piece");
+        Check(((int[])Invoke("ExportVariants", multiTexture)!).SequenceEqual([0]), "First mode exports only the first texture");
+        ((ComboBox)type.GetField("_variants", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(dialog)!).SelectedIndex = 1;
+        Check((bool)type.GetProperty("ExportAllTextures")!.GetValue(dialog)!, "All-texture mode is explicit");
+        Check(((int[])Invoke("ExportVariants", multiTexture)!).SequenceEqual([0, 1, 2]), "All mode retains every texture without a fixed cap");
+        Check(((int[])Invoke("ExportVariants", new ClothItem())!).SequenceEqual([-1]), "Untextured pieces still export once");
+        Check(!(bool)type.GetProperty("OverwriteExisting")!.GetValue(dialog)!, "Texture mode does not change UUID skip policy");
         ((ComboBox)type.GetField("_existing", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(dialog)!).SelectedIndex = 1;
         Check((bool)type.GetProperty("OverwriteExisting")!.GetValue(dialog)!, "Replacement is explicit");
         Check(type.GetProperty("RebuildHair") is null && type.GetProperty("ResumeExisting") is null, "Special hair/restore modes removed");

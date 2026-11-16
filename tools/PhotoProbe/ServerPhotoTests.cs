@@ -62,6 +62,10 @@ internal static class ServerPhotoTests
         ServerPhotoCatalog.Parse(allTextures.RootElement).Filter(firstOnly);
         if (firstOnly.Items[0].TextureIds.Count != 1 || firstOnly.Items[0].TextureIds[0] != firstTexture)
             throw new Exception("Photo export did not select only the first available texture.");
+        var everyTexture = new ClothProject { Items = [selected] };
+        ServerPhotoCatalog.Parse(allTextures.RootElement).Filter(everyTexture, firstTextureOnly: false);
+        if (!everyTexture.Items[0].TextureIds.SequenceEqual(new[] { firstTexture, secondTexture }))
+            throw new Exception("All-texture mode lost available texture UUIDs before the export options.");
         using var incomplete = JsonDocument.Parse(document.RootElement.GetRawText().Replace("\"complete\":true", "\"complete\":false"));
         try { ServerPhotoCatalog.Parse(incomplete.RootElement); throw new Exception("Partial server catalog was accepted."); }
         catch (System.IO.InvalidDataException) { }

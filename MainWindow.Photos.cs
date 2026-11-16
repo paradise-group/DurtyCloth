@@ -27,7 +27,7 @@ public partial class MainWindow
             }
             var catalog = RunWithLoading("Fotografias do GTA V", "A localizar roupas e acessórios do GTA instalado...",
                 progress => GtaPhotoCatalog.Scan(gameFolder, progress: progress));
-            var filtered = serverCatalog.Filter(catalog.Project);
+            var filtered = serverCatalog.Filter(catalog.Project, firstTextureOnly: false);
             Status($"Catálogo do servidor: {filtered.MatchedItems} peças e {filtered.Textures} texturas presentes no GTA; {filtered.UnmatchedItems} peças sem origem nesta instalação.");
             if (catalog.Warnings.Count > 0)
                 MessageBox.Show(this, $"Foram encontrados {catalog.Warnings.Count} avisos ao ler os arquivos do GTA. A exportação inclui apenas os arquivos que puderam ser lidos.",
@@ -84,12 +84,12 @@ public partial class MainWindow
         {
         foreach (var item in items) ClothingIdentityMap.EnsureTextures(item);
         var output = picker.FolderName;
-        var settings = new PhotoExportSettings(options.ImageOptions, options.PhotoBackground.ToString(), options.IncludePed);
+        var settings = new PhotoExportSettings(options.ImageOptions, options.PhotoBackground.ToString(), options.IncludePed, options.ExportAllTextures);
         var imageOptions = settings.image;
         var photoBackground = options.PhotoBackground;
         var includePed = settings.includePed;
         var session = new PhotoExportSession(output, options.OverwriteExisting);
-        var total = items.Length +
+        var total = items.Sum(item => options.ExportVariants(item).Length) +
             tattoos.Sum(tattoo => options.ExportGenders(tattoo.Gender).Length) +
             appearances.Sum(appearance => options.ExportGenders(appearance.Gender).Length);
         var progress = new PhotoExportProgressWindow(total) { Owner = this };
@@ -109,7 +109,7 @@ public partial class MainWindow
             foreach (var item in items)
             {
                 if (progress.CancelRequested) break;
-                var variants = item.TexturePaths.Count == 0 ? new[] { -1 } : new[] { 0 };
+                var variants = options.ExportVariants(item);
                 string DrawablePath(int variant) => Path.Combine(output, SafePhotoName(item.Gender), SafePhotoName(item.Category),
                     item.Id.ToString("D") + "." + (variant < 0 ? "sem_textura" : item.TextureIds[variant].ToString("D")) + imageOptions.Extension);
                 var existing = new Dictionary<int, string>();
@@ -335,7 +335,7 @@ public partial class MainWindow
             await index.FlushAsync();
             File.WriteAllText(Path.Combine(output, "LEIA-ME.txt"),
                 "Fotografias da prévia offline do Paradise Cloth Studio.\n" +
-                "Cada peça tem uma fotografia com a primeira textura disponível. O enquadramento usa a geometria da peça.\n" +
+                (options.ExportAllTextures ? "Modo: todas as texturas de cada peça.\n" : "Modo: só a primeira textura disponível de cada peça.\n") +
                 "As tatuagens do projeto são mostradas no ped por uma projeção aproximada; a posição exata no GTA pode diferir.\n" +
                 "Tatuagens sem zona mostram a textura ao lado do ped, sem aplicação na pele.\n" +
                 "Olhos, pelos, maquilhagem e outras texturas de aparência também usam projeção aproximada no ped.\n" +

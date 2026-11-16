@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace FooxClothStudio;
 
-public sealed record PhotoExportSettings(PhotoImageOptions image, string background, bool includePed);
+public sealed record PhotoExportSettings(PhotoImageOptions image, string background, bool includePed, bool allTextures = false);
 
 public sealed class PhotoExportSession
 {

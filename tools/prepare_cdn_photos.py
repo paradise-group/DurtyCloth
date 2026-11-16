@@ -65,6 +65,8 @@ def prepare(source, destination, identities):
     if destination.exists():
         raise ValueError("Choose a new output directory; existing packages are never overwritten.")
     document = load_identities(source, identities)
+    settings_file = source / "export-settings.json"
+    all_textures = json.loads(settings_file.read_text(encoding="utf-8-sig")).get("allTextures", False) if settings_file.is_file() else False
     records = {}
     export_errors = []
     for number, line in enumerate((source / "index.jsonl").open(encoding="utf-8-sig"), 1):
@@ -171,13 +173,15 @@ def prepare(source, destination, identities):
         if not entry.get("available", True):
             continue
         available = [texture for texture in entry["textures"] if texture.get("available", True)]
-        for texture in sorted(available, key=lambda texture: texture["index"])[:1]:
+        required = sorted(available, key=lambda texture: texture["index"])
+        for texture in required if all_textures else required[:1]:
             if texture.get("available", True) and (entry["id"], texture["id"]) not in mapped:
                 missing.append({"itemId": entry["id"], "textureId": texture["id"], "name": entry["name"],
                     "index": texture["index"], "inherited": texture.get("inherited", False)})
     template = "https://cdn.touz.dev/game/images/nations3/nation_skinshop/clothes/{gender}/{slot}/{itemId}.{textureId}.webp"
     ready = [entry for entry in completed if entry["status"] == "ready"]
     summary = {"images": len(completed), "bytes": sum(entry["bytes"] for entry in completed),
+        "texture_mode": "all" if all_textures else "first",
         "ready_images": len(ready), "unclassified_images": len(completed) - len(ready),
         "by_kind": dict(Counter(entry["kind"] for entry in completed)),
         "image_dimensions": dict(Counter(f"{entry['width']}x{entry['height']}" for entry in completed)),
@@ -193,7 +197,7 @@ def prepare(source, destination, identities):
             "Existing nations3 folders are retained; UUID filenames and original image bytes are unchanged.",
             "Unclassified images remain in pending, outside the upload folder.",
             "The server image manifest must be regenerated to associate appearance and tattoo catalog entries.",
-            "Coverage checks require only the first available texture per item; additional color variants are optional.",
+            "Coverage checks follow the first/all texture mode saved in export-settings.json.",
             "Missing inherited texture variants are reported; no placeholder images or guessed aliases were created."]}
     (destination / "report.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     with (destination / "missing-images.csv").open("w", newline="", encoding="utf-8-sig") as stream:

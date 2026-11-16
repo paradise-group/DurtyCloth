@@ -11,6 +11,7 @@ internal sealed class PhotoExportOptionsWindow : Window
     private readonly Dictionary<string, CheckBox> _genders = new();
     private readonly CheckBox _tattoos = new() { Content = "Tatuagens", IsChecked = true };
     private readonly ComboBox _existing = new() { ItemsSource = new[] { "Ignorar fotografias com o mesmo UUID", "Substituir fotografias com o mesmo UUID" }, SelectedIndex = 0 };
+    private readonly ComboBox _variants = new() { ItemsSource = new[] { "Só a primeira textura de cada peça", "Todas as texturas de cada peça" }, SelectedIndex = 0, Margin = new Thickness(0, 4, 0, 12) };
     private readonly TextBox _background = new() { Text = "#625F68", Margin = new Thickness(0, 4, 0, 10) };
     private readonly CheckBox _transparent = new() { Content = "Fundo transparente (PNG / WebP)", Margin = new Thickness(0, 0, 0, 10) };
     private readonly ComboBox _format = new() { ItemsSource = new[] { "WebP", "PNG", "JPEG" }, SelectedIndex = 0, Margin = new Thickness(0, 4, 0, 10) };
@@ -19,6 +20,9 @@ internal sealed class PhotoExportOptionsWindow : Window
     private readonly CheckBox _ped = new() { Content = "Mostrar ped base (se GTA V estiver configurado)", Margin = new Thickness(0, 10, 0, 10) };
 
     public bool OverwriteExisting => _existing.SelectedIndex == 1;
+    public bool ExportAllTextures => _variants.SelectedIndex == 1;
+    public int[] ExportVariants(ClothItem item) => item.TexturePaths.Count == 0 ? [-1] :
+        ExportAllTextures ? Enumerable.Range(0, item.TexturePaths.Count).ToArray() : [0];
     public bool IncludePed => _ped.IsChecked == true;
     public Color PhotoBackground { get; private set; } = Color.FromRgb(0x62, 0x5F, 0x68);
     public PhotoImageOptions ImageOptions { get; private set; } = new(512, "WebP", 85);
@@ -55,6 +59,8 @@ internal sealed class PhotoExportOptionsWindow : Window
             controls.Children.Add(button);
         }
         selection.Children.Add(controls);
+        selection.Children.Add(new TextBlock { Text = "Modo de exportação", FontWeight = FontWeights.Bold });
+        selection.Children.Add(_variants);
         selection.Children.Add(new TextBlock { Text = "Género", FontWeight = FontWeights.Bold });
         foreach (var gender in project.Items.Where(item => !item.IsDummy).Select(item => item.Gender)
             .Concat(project.Tattoos.Count + project.AppearanceAssets.Count > 0 ? new[] { "Masculino", "Feminino" } : [])
