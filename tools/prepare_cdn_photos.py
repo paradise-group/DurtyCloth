@@ -93,6 +93,8 @@ def prepare(source, destination, identities):
         "task": "9", "decl": "10", "jbib": "11", "p_head": "p0", "p_eyes": "p1", "p_ears": "p2", "p_lwrist": "p6", "p_rwrist": "p7"}
     appearance = {"Barba": "facialHair", "Sobrancelhas": "eyebrows", "Blush": "blush", "Pelos corporais": "chestHair",
         "Lábios": "lipstick", "Olhos": "eyes", "Maquilhagem": "makeup", "Pintura facial": "makeup"}
+    native_appearance = {"blemishes", "facialHair", "eyebrows", "ageing", "makeup", "blush", "complexion",
+        "sunDamage", "lipstick", "freckles", "chestHair", "bodyBlemishes", "addBodyBlemishes"}
     plan = []
     targets = {}
     for path in files:
@@ -126,6 +128,8 @@ def prepare(source, destination, identities):
                 raise ValueError(f"Unexpected appearance filename: {relative}")
             if kind == "tattoo":
                 target = base / "nation_tattoos" / english_gender / path.name.lower()
+            elif record.get("nativeCategory") in native_appearance:
+                target = base / "nation_barbershop" / english_gender / record["nativeCategory"] / path.name.lower()
             elif category in appearance:
                 target = base / "nation_barbershop" / english_gender / appearance[category] / path.name.lower()
         else:

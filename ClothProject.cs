@@ -63,6 +63,9 @@ public sealed class TattooItem
     public string Label { get; set; } = "Tattoo";
     public string ImagePath { get; set; } = "";
     public string SourceTextureName { get; set; } = "";
+    public string? Collection { get; set; }
+    public string? Overlay { get; set; }
+    public bool UseTintColour { get; set; }
     public string Gender { get; set; } = "Both";
     public string Zone { get; set; } = "ZONE_TORSO";
     public float U { get; set; } = 0.5f;
@@ -85,6 +88,9 @@ public sealed class AppearanceAsset
     public string Kind { get; set; } = "Outros";
     public string Gender { get; set; } = "Both";
     public string TexturePath { get; set; } = "";
+    public string? OverlayCategory { get; set; }
+    public int? OverlayIndex { get; set; }
+    public uint? DiffuseTextureHash { get; set; }
 }
 
 public sealed class ClothItem

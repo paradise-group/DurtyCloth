@@ -12,6 +12,7 @@ internal static class Program
         ServerPhotoTests.Run();
         WebPExportTests.Run(Path.Combine(output, "formats"));
         HeadPhotoTests.Run(Path.Combine(output, "head"));
+        SurfacePhotoTests.Run(Path.Combine(output, "surfaces"));
         var game = GamePedAssets.FindGameFolder();
         if (game is not null) GtaPhotoTests.Run(game, Path.Combine(output, "gta"));
         Console.WriteLine("PASS: default photo export regression suite. Fixtures: " + output);

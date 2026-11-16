@@ -55,6 +55,7 @@ public partial class MainWindow
                 });
             string ResolvePhotoAsset(string path) => path.StartsWith("gta://", StringComparison.Ordinal)
                 ? catalog.Resolve(path[6..]) : AbsoluteAssetPath(path);
+            combined = PhotoDecorationSources.Prepare(combined, catalog, includeNative: true, ResolvePhotoAsset);
             var unresolved = combined.Items.Where(item => !item.IsDummy && item.TexturePaths.Count == 0).ToList();
             if (unresolved.Count > 0)
             {
@@ -80,6 +81,13 @@ public partial class MainWindow
     private async Task ExportPreviewPhotosAsync(ClothProject project, Func<string, string> resolveAsset,
         string? sourceGameFolder = null, Action<string>? prepareOutput = null)
     {
+        var detectedGame = sourceGameFolder ?? GamePedAssets.FindGameFolder();
+        if (sourceGameFolder is null && detectedGame is not null
+            && (project.AppearanceAssets.Any(asset => asset.OverlayCategory is null) || project.Tattoos.Any(tattoo => string.IsNullOrEmpty(tattoo.Zone))))
+        {
+            var metadata = await Task.Run(() => GtaPhotoCatalog.Scan(detectedGame));
+            project = PhotoDecorationSources.Prepare(project, metadata, includeNative: false, resolveAsset);
+        }
         var items = project.Items.Where(item => !item.IsDummy).ToArray();
         var tattoos = project.Tattoos.ToArray();
         var appearances = project.AppearanceAssets.ToArray();
@@ -215,40 +223,10 @@ public partial class MainWindow
                     if (progress.CancelRequested) break;
                     if (string.IsNullOrEmpty(tattoo.Zone))
                     {
-                        try
-                        {
-                            var folder = Path.Combine(output, "tattoos", "zona_por_definir", tattooGender);
-                            var legacyPath = Path.Combine(folder, SafePhotoName(tattoo.Name) + "_" + tattoo.Id.ToString("N")[..8] + imageOptions.Extension);
-                            var path = Path.Combine(folder, tattoo.Id.ToString("D") + imageOptions.Extension);
-                            var savedPath = options.OverwriteExisting ? null : session.FindExisting(path, legacyPath);
-                            if (savedPath is null)
-                            {
-                                if (configuredGameFolder is null) throw new InvalidDataException("Configure a pasta do GTA V para fotografar tatuagens com o ped.");
-                                if (!pedCache.TryGetValue(tattooGender, out var unplacedPed))
-                                {
-                                    unplacedPed = await Task.Run(() => PreviewPhotoRenderer.LoadPed(configuredGameFolder, tattooGender));
-                                    pedCache[tattooGender] = unplacedPed;
-                                }
-                                var texture = await Task.Run(() => TattooExporter.ReadImageForPreview(tattoo, resolveAsset(tattoo.ImagePath)));
-                                var image = DecodeTextureBitmap(texture, 1024);
-                                Directory.CreateDirectory(folder);
-                                path = session.SaveImage(path, temporary => PreviewPhotoRenderer.SaveUnplacedTattoo(temporary, image, unplacedPed, photoBackground, imageOptions), legacyPath);
-                            }
-                            else { path = savedPath; reused++; }
-                            if (options.OverwriteExisting || session.NeedsIndexEntry(path))
-                                await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "ok", tattoo.Name,
-                                    gender = tattooGender, file = Path.GetRelativePath(output, path), renderMode = "base-ped-source-swatch",
-                                    message = "Zona desconhecida; textura mostrada ao lado do ped." }));
-                            written++; unplaced++;
-                        }
-                        catch (Exception ex)
-                        {
-                            failed++;
-                            await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "error", tattoo.Name, tattoo.Id, tattoo.ImagePath, tattoo.SourceTextureName,
-                                gender = tattooGender, message = ex.Message }));
-                        }
-                        progress.Report(++completed, tattoo.Name + " / zona por definir");
-                        await Task.Yield();
+                        failed++; unplaced++;
+                        await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "error", tattoo.Name,
+                            gender = tattooGender, message = "Metadados de posição indisponíveis. A textura não foi publicada como fotografia aplicada." }));
+                        progress.Report(++completed, tattoo.Name + " / posição indisponível");
                         continue;
                     }
                     try
@@ -259,7 +237,6 @@ public partial class MainWindow
                         var savedPath = options.OverwriteExisting ? null : session.FindExisting(path, legacyPath);
                         if (savedPath is null)
                         {
-                            TattooExporter.Validate(tattoo);
                             if (configuredGameFolder is null) throw new InvalidDataException("Configure a pasta do GTA V para fotografar tatuagens no ped.");
                             if (!pedCache.TryGetValue(tattooGender, out var tattooPed))
                             {
@@ -274,7 +251,8 @@ public partial class MainWindow
                         else { path = savedPath; reused++; }
                         if (options.OverwriteExisting || session.NeedsIndexEntry(path))
                             await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "ok", tattoo.Name,
-                                tattoo.Zone, gender = tattooGender, file = Path.GetRelativePath(output, path), renderMode = "base-ped-approximate-decal" }));
+                                tattoo.Zone, tattoo.Collection, tattoo.Overlay, gender = tattooGender,
+                                file = Path.GetRelativePath(output, path), renderMode = "base-ped-uv-decal" }));
                         written++;
                     }
                     catch (Exception ex)
@@ -300,12 +278,13 @@ public partial class MainWindow
                             var loaded = new YtdFile(); loaded.Load(File.ReadAllBytes(resolveAsset(appearance.TexturePath)));
                             return loaded;
                         });
-                        var textures = (ytd.TextureDict?.Textures?.data_items ?? []).Where(texture => texture is not null).ToArray();
+                        var textures = AppearancePhotoTextures.Select(ytd, appearance.Name, appearance.DiffuseTextureHash);
                         if (textures.Length == 0) throw new InvalidDataException("YTD sem texturas internas.");
-                        for (var textureIndex = 0; textureIndex < textures.Length; textureIndex++)
+                        for (var selectedIndex = 0; selectedIndex < textures.Length; selectedIndex++)
                         {
                             if (progress.CancelRequested) break;
-                            var texture = textures[textureIndex];
+                            var texture = textures[selectedIndex];
+                            var textureIndex = Array.IndexOf(ytd.TextureDict.Textures.data_items, texture);
                             try
                             {
                                 var folder = Path.Combine(output, "aparencia", SafePhotoName(appearance.Kind), appearanceGender);
@@ -323,19 +302,17 @@ public partial class MainWindow
                                         pedCache[appearanceGender] = appearancePed;
                                     }
                                     var image = DecodeTextureBitmap(texture, 1024);
-                                    var overlay = new TattooItem
-                                    {
-                                        Zone = appearance.Kind == "Pelos corporais" ? "ZONE_TORSO" : "ZONE_HEAD",
-                                        ScaleX = appearance.Kind == "Olhos" ? 0.22f : 0.45f,
-                                        ScaleY = appearance.Kind == "Olhos" ? 0.16f : 0.35f
-                                    };
-                                    path = session.SaveImage(path, temporary => PreviewPhotoRenderer.SaveTattoo(temporary, overlay, image, appearancePed, photoBackground, imageOptions), legacyPath);
+                                    if (appearance.OverlayCategory is null)
+                                        throw new InvalidDataException("A aparência não tem uma definição de aplicação no GTA: " + appearance.Name);
+                                    path = session.SaveImage(path, temporary => PedSurfacePhotos.SaveAppearance(temporary,
+                                        appearance.OverlayCategory, image, appearancePed, photoBackground, imageOptions), legacyPath);
                                 }
                                 else { path = savedPath; reused++; }
                                 if (options.OverwriteExisting || session.NeedsIndexEntry(path))
                                     await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "appearance", status = "ok", appearance.Name,
                                         appearanceKind = appearance.Kind, gender = appearanceGender, texture = texture.Name, file = Path.GetRelativePath(output, path),
-                                        renderMode = "base-ped-approximate-overlay" }));
+                                        nativeCategory = appearance.OverlayCategory, nativeIndex = appearance.OverlayIndex,
+                                        renderMode = "base-ped-uv-overlay" }));
                                 written++;
                             }
                             catch (Exception ex)
@@ -360,10 +337,9 @@ public partial class MainWindow
             File.WriteAllText(Path.Combine(output, "LEIA-ME.txt"),
                 "Fotografias da prévia offline do Paradise Cloth Studio.\n" +
                 (options.ExportAllTextures ? "Modo: todas as texturas de cada peça.\n" : "Modo: só a primeira textura disponível de cada peça.\n") +
-                "As tatuagens do projeto são mostradas no ped por uma projeção aproximada; a posição exata no GTA pode diferir.\n" +
-                "Tatuagens sem zona mostram a textura ao lado do ped, sem aplicação na pele.\n" +
-                "Olhos, pelos, maquilhagem e outras texturas de aparência também usam projeção aproximada no ped.\n" +
-                "Cores dos olhos, tintas de cabelo/pelos, overlays e traços faciais configurados por natives do GTA não são reproduzidos nesta prévia.\n" +
+                "Tatuagens e efeitos de aparência são aplicados à pele do modelo 3D usando os metadados e as coordenadas dos arquivos do GTA.\n" +
+                "Tatuagens sem metadados de posição não são exportadas como fotografias aplicadas.\n" +
+                "A prévia usa um rosto, cores e iluminação padrão; a aparência do seu personagem no jogo pode variar.\n" +
                 "Consulte index.jsonl para a origem e o estado de cada imagem.\n", new UTF8Encoding(false));
             var summary = $"{written - reused} imagens novas; {reused} imagens aproveitadas; {unplaced} tatuagens com zona desconhecida; {failed} falhas" +
                 (progress.CancelRequested ? "; exportação cancelada" : "") + ".\n\n" + output;

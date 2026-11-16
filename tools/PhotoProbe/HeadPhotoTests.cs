@@ -42,7 +42,7 @@ internal static class HeadPhotoTests
         }, []);
         var expected = Path.Combine(output, "empty-head.png");
         PreviewPhotoRenderer.SaveEmptySlot(expected, ped, "Chapéu [p_head]", background, options);
-        foreach (var slot in new[] { "p_head", "p_eyes", "p_ears", "p_mouth", "berd" })
+        foreach (var slot in new[] { "p_head", "p_eyes", "p_ears", "p_mouth", "berd", "hair" })
         {
             var category = "Fixture [" + slot + "]";
             if (!PreviewPhotoRenderer.IsEmptySlot(placeholder, category)) throw new Exception("Placeholder not detected for " + slot);

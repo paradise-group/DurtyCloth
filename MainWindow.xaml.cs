@@ -1218,6 +1218,17 @@ public partial class MainWindow : Window
         foreach (var part in data.Parts)
         {
             var key = part.TextureName ?? "__selected_diffuse";
+            var bound = ytd.TextureDict?.Lookup(JenkHash.GenHash(key.ToLowerInvariant()));
+            if (bound is not null)
+            {
+                try
+                {
+                    result[key] = bound.Name is not null && result.TryGetValue(bound.Name, out var boundImage)
+                        ? boundImage : DecodeTextureBitmap(bound, 1024);
+                }
+                catch (InvalidDataException) { }
+                continue;
+            }
             if (result.ContainsKey(key)) continue;
             var selected = TextureReferenceCoverage.Resolve(part.TextureName, availableImages);
             if (selected is not null && result.TryGetValue(selected, out var image)) result[key] = image;

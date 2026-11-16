@@ -7,7 +7,8 @@ using CodeWalker.Utils;
 namespace FooxClothStudio;
 
 public sealed record ModelPreviewPart(Point3D[] Positions, int[] Indices,
-    Point[] TextureCoordinates, string? TextureName, bool UsesTextureAlpha = true, bool IsEmissive = false, bool IsDecoration = false);
+    Point[] TextureCoordinates, string? TextureName, bool UsesTextureAlpha = true, bool IsEmissive = false, bool IsDecoration = false,
+    Point[]? DecorationCoordinates = null);
 
 public sealed record ModelPreviewData(ModelPreviewPart[] Parts,
     int SourceTriangles, int PreviewTriangles);
@@ -86,6 +87,8 @@ public static class ModelPreview
                 (1u << (int)VertexSemantics.TexCoord0)) != 0;
             var positions = new List<Point3D>();
             var uvs = new List<Point>();
+            var decorationUvs = new List<Point>();
+            var hasDecorationUvs = (geometry.VertexData.Info.Flags & (1u << (int)VertexSemantics.TexCoord1)) != 0;
             var indices = new List<int>();
             var vertexMap = new Dictionary<ushort, int>();
             var seen = 0;
@@ -115,6 +118,11 @@ public static class ModelPreview
                                 (int)VertexSemantics.TexCoord0);
                             uvs.Add(new Point(uv.X, uv.Y));
                         }
+                        if (hasDecorationUvs)
+                        {
+                            var uv = geometry.VertexData.GetVector2(sourceIndex, (int)VertexSemantics.TexCoord1);
+                            decorationUvs.Add(new Point(uv.X, uv.Y));
+                        }
                     }
                     indices.Add(mapped);
                 }
@@ -123,7 +131,8 @@ public static class ModelPreview
             parts.Add(new ModelPreviewPart(positions.ToArray(), indices.ToArray(),
                 uvs.ToArray(), hasUvs ? DiffuseTextureName(entry.Shader) : null,
                 UsesTextureAlpha(entry.Shader), IsEmissive(entry.Shader),
-                entry.Shader is not null && (uint)entry.Shader.Name == JenkHash.GenHash("ped_decal_decoration")));
+                entry.Shader is not null && (uint)entry.Shader.Name == JenkHash.GenHash("ped_decal_decoration"),
+                hasDecorationUvs ? decorationUvs.ToArray() : null));
         }
         var previewTriangles = parts.Sum(part => part.Indices.Length / 3);
         if (previewTriangles == 0)

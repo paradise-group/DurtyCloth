@@ -36,6 +36,19 @@ chapéus podem usar a traseira quando a textura contém o detalhe principal ness
 face. O GTA é detetado pela configuração existente e a pasta de fotos é sempre
 escolhida no diálogo de exportação.
 
+As prévias de barbearia e tatuagens são geradas offline, sem capturar imagens no
+jogo. Efeitos faciais usam as coordenadas da textura da cabeça; tatuagens usam o
+segundo conjunto de UVs e o tile da zona definido no modelo. A aplicação respeita
+posição, rotação, escala com sinal e continuidade horizontal. A câmera aproxima a
+cabeça ou a região do corpo e escolhe o lado onde está a tatuagem.
+As máscaras de cor de pelos recebem uma cor de prévia, preservando o alfa.
+Mapas normais e especulares não são exportados como variantes visuais.
+O catálogo inclui as definições de aparência e tatuagens do GTA instalado, e
+preserva os UUIDs das substituições do projeto. Texturas sem metadados de posição
+permanecem disponíveis no projeto, mas não são apresentadas como fotos aplicadas.
+O teste padrão cobre o tile de cabeça, posições negativas, escala espelhada,
+preservação de alfa e enquadramento da opção sem cabelo.
+
 Materiais `ped_emissive` e `ped_palette` não usam o alfa difuso como transparência:
 referências dos mantenedores do Sollumz em
 https://github.com/Sollumz/Sollumz/issues/1121 e

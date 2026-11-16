@@ -44,7 +44,7 @@ public static class PreviewPhotoRenderer
     public static bool IsEmptySlot(ModelPreviewData model, string category)
     {
         var slot = category.Contains('[') ? category.Split('[').Last().TrimEnd(']') : "";
-        return (slot is "p_head" or "p_eyes" or "p_ears" or "p_mouth" or "berd" or
+        return (slot is "p_head" or "p_eyes" or "p_ears" or "p_mouth" or "berd" or "hair" or
             "uppr" or "lowr" or "hand" or "feet" or "teef" or "accs" or "task" or "jbib") && model.SourceTriangles <= 2;
     }
 
@@ -67,9 +67,9 @@ public static class PreviewPhotoRenderer
         return Render(new ModelPreviewData(parts, triangles, triangles), ped.Textures, null, "Body context", background);
     }
 
-    private static RenderTargetBitmap Render(ModelPreviewData garment,
+    internal static RenderTargetBitmap Render(ModelPreviewData garment,
         Dictionary<string, BitmapSource> garmentTextures, PhotoPed? ped,
-        string category, Color background, Matrix3D? standaloneAttachment = null)
+        string category, Color background, Matrix3D? standaloneAttachment = null, ModelPreviewPart[]? framingOverride = null)
     {
         var slot = category.Contains('[') ? category.Split('[').Last().TrimEnd(']') : "";
         if (IsEmptySlot(garment, category))
@@ -82,8 +82,8 @@ public static class PreviewPhotoRenderer
                 : throw new InvalidDataException("A fotografia de chapéus requer o alinhamento do ped base.");
         if (ped is not null && ModelPreview.PropBoneTag(slot) is int boneTag)
             garment = ModelPreview.AttachToBone(garment, ped.Attachments[boneTag]);
-        var focus = Bounds(garment.Parts);
-        var framingParts = garment.Parts;
+        var framingParts = framingOverride ?? garment.Parts;
+        var focus = Bounds(framingParts);
         if (ped is not null)
         {
             var headParts = ped.Parts.Where(part => part.TextureName?.StartsWith("__ped_head_", StringComparison.Ordinal) == true).ToArray();
@@ -98,7 +98,7 @@ public static class PreviewPhotoRenderer
             }
         }
         var itemReachesFeet = focus.CenterY - focus.SizeY / 2 < -0.85;
-        var headContext = ped is not null && (slot is "berd" or "p_eyes" or "p_ears" or "p_mouth");
+        var headContext = ped is not null && (slot is "hair" or "berd" or "p_eyes" or "p_ears" or "p_mouth");
         var garmentParts = slot == "hair" ? OrderHairLayers(garment.Parts) : garment.Parts;
         var bodyParts = ped is null ? [] : ped.Parts.Where(p => !p.TextureName!.StartsWith("__ped_" + slot + "_", StringComparison.Ordinal) &&
                 !p.TextureName.StartsWith("__ped_hair_", StringComparison.Ordinal) &&
@@ -295,55 +295,7 @@ public static class PreviewPhotoRenderer
 
     public static BitmapSource RenderTattoo(TattooItem tattoo, BitmapSource image,
         PhotoPed ped, Color background)
-    {
-        var slot = tattoo.Zone switch
-        {
-            "ZONE_HEAD" => "head",
-            "ZONE_LEFT_LEG" or "ZONE_RIGHT_LEG" => "lowr",
-            _ => "uppr"
-        };
-        var points = ped.Parts.Where(p => p.TextureName?.StartsWith("__ped_" + slot + "_", StringComparison.Ordinal) == true)
-            .SelectMany(p => p.Positions).ToArray();
-        if (points.Length == 0) throw new InvalidDataException("Ped base sem geometria para " + tattoo.Zone);
-        var minX = points.Min(p => p.X); var maxX = points.Max(p => p.X);
-        var minY = points.Min(p => p.Y); var maxY = points.Max(p => p.Y);
-        var width = maxX - minX; var height = maxY - minY;
-        var x = tattoo.Zone switch
-        {
-            "ZONE_LEFT_ARM" => minX + width * 0.16,
-            "ZONE_RIGHT_ARM" => maxX - width * 0.16,
-            "ZONE_LEFT_LEG" => minX + width * 0.25,
-            "ZONE_RIGHT_LEG" => maxX - width * 0.25,
-            _ => (minX + maxX) / 2
-        };
-        x += (tattoo.U - 0.5) * width * 0.3;
-        var y = maxY - height * (tattoo.Zone == "ZONE_HEAD" ? 0.45 : 0.55)
-            - (tattoo.V - 0.5) * height * 0.3;
-        var z = points.Max(p => p.Z) + 0.07;
-        var halfWidth = Math.Clamp(width * tattoo.ScaleX * 0.24, 0.05, 0.40);
-        var halfHeight = Math.Clamp(height * tattoo.ScaleY * 0.24, 0.05, 0.40);
-        var radians = tattoo.Rotation * Math.PI / 180;
-        Point3D Corner(double dx, double dy) => new(x + dx * Math.Cos(radians) - dy * Math.Sin(radians),
-            y + dx * Math.Sin(radians) + dy * Math.Cos(radians), z);
-        var part = new ModelPreviewPart(
-            [Corner(-halfWidth, halfHeight), Corner(halfWidth, halfHeight),
-             Corner(halfWidth, -halfHeight), Corner(-halfWidth, -halfHeight)],
-            [], [], "__tattoo_focus");
-        var data = new ModelPreviewData([part], 0, 0);
-        var baseImage = Render(data, new Dictionary<string, BitmapSource>(), ped, "Tattoo", background);
-        var visual = new DrawingVisual();
-        using (var drawing = visual.RenderOpen())
-        {
-            drawing.DrawImage(baseImage, new Rect(0, 0, Size, Size));
-            var photoWidth = Math.Clamp(halfWidth * 500, 70, 280);
-            var photoHeight = photoWidth * image.PixelHeight / image.PixelWidth;
-            drawing.DrawImage(image, new Rect((Size - photoWidth) / 2, (Size - photoHeight) / 2,
-                photoWidth, photoHeight));
-        }
-        var composite = new RenderTargetBitmap(Size, Size, 96, 96, PixelFormats.Pbgra32);
-        composite.Render(visual);
-        return composite;
-    }
+        => PedSurfacePhotos.RenderTattoo(tattoo, image, ped, background);
 
     public static void SaveUnplacedTattoo(string destination, BitmapSource image, PhotoPed ped, Color background, PhotoImageOptions? options = null)
         => (options ?? new()).Write(destination, RenderUnplacedTattoo(image, ped, background));

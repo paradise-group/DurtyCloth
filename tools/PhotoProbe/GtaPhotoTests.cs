@@ -29,6 +29,56 @@ internal static class GtaPhotoTests
         if (pants.TextureIds[0] != Guid.Parse("643c6e47-b34a-13e8-9a1c-a59b4cdd1182"))
             throw new Exception("GTA texture UUID differs from the existing exported photo UUID.");
         catalog.WriteIdentityMap(output);
+        var sourceAppearance = catalog.Project.AppearanceAssets.First(asset => asset.Kind == "Sobrancelhas");
+        var customAppearance = new AppearanceAsset { Id = Guid.NewGuid(), Name = sourceAppearance.Name,
+            Kind = sourceAppearance.Kind, Gender = "Female", TexturePath = "appearance.ytd" };
+        var prepared = PhotoDecorationSources.Prepare(new ClothProject { AppearanceAssets = [customAppearance] }, catalog, false);
+        var sharedAppearance = prepared.AppearanceAssets.Single();
+        if (sharedAppearance.Id != customAppearance.Id || sharedAppearance.Gender != "Both" || sharedAppearance.OverlayIndex is null
+            || sharedAppearance.DiffuseTextureHash is null || customAppearance.Gender != "Female"
+            || customAppearance.OverlayIndex is not null || customAppearance.DiffuseTextureHash is not null)
+            throw new Exception("Native shared overlay definitions lost a gender, changed a project UUID or modified the source project.");
+        foreach (var kind in new[] { "Barba", "Sobrancelhas", "Maquilhagem", "Pelos corporais" })
+        {
+            var appearance = catalog.Project.AppearanceAssets.First(asset => asset.Kind == kind);
+            var file = new CodeWalker.GameFiles.YtdFile();
+            file.Load(File.ReadAllBytes(catalog.Resolve(appearance.TexturePath)));
+            var texture = AppearancePhotoTextures.Select(file, appearance.Name).Single();
+            var decode = typeof(MainWindow).GetMethod("DecodeTextureBitmap", BindingFlags.NonPublic | BindingFlags.Static)!;
+            var image = (BitmapSource)decode.Invoke(null, [texture, 1024])!;
+            using (var raw = File.Create(Path.Combine(output, appearance.OverlayCategory + "-texture.png")))
+            {
+                var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); encoder.Save(raw);
+            }
+            PedSurfacePhotos.SaveAppearance(Path.Combine(output, appearance.OverlayCategory + "-applied.png"),
+                appearance.OverlayCategory!, image, PreviewPhotoRenderer.LoadPed(game, "Masculino"), Color.FromRgb(98, 95, 104));
+        }
+        var basePed = PreviewPhotoRenderer.LoadPed(game, "Masculino");
+        var tiles = basePed.Parts.Where(part => part.DecorationCoordinates is not null).SelectMany(part =>
+            part.Positions.Select((point, index) => new { part.TextureName, point,
+                tile = Math.Floor(part.DecorationCoordinates![index].Y) })).GroupBy(vertex => new { vertex.TextureName, vertex.tile })
+            .Select(group => new { group.Key, x = group.Average(vertex => vertex.point.X), y = group.Average(vertex => vertex.point.Y),
+                z = group.Average(vertex => vertex.point.Z), count = group.Count() });
+        File.WriteAllText(Path.Combine(output, "decoration-tiles.json"), JsonSerializer.Serialize(tiles, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(output, "surface-coordinates.json"), JsonSerializer.Serialize(basePed.Parts.Select(part => new
+        {
+            part.TextureName,
+            first = part.TextureCoordinates.Length == 0 ? null : new[] { part.TextureCoordinates.Min(uv => uv.X), part.TextureCoordinates.Max(uv => uv.X), part.TextureCoordinates.Min(uv => uv.Y), part.TextureCoordinates.Max(uv => uv.Y) },
+            second = part.DecorationCoordinates is not { Length: > 0 } ? null : new[] { part.DecorationCoordinates.Min(uv => uv.X), part.DecorationCoordinates.Max(uv => uv.X), part.DecorationCoordinates.Min(uv => uv.Y), part.DecorationCoordinates.Max(uv => uv.Y) }
+        }), new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(output, "native-tattoos.json"), JsonSerializer.Serialize(catalog.Project.Tattoos));
+        var headTattoo = catalog.Project.Tattoos.First(tattoo => tattoo.Zone == "ZONE_HEAD" && tattoo.Gender == "Male"
+            && tattoo.U >= 0 && !tattoo.Name.Contains("Hair", StringComparison.OrdinalIgnoreCase));
+        var tattooTexture = TattooExporter.ReadImageForPreview(headTattoo, catalog.Resolve(headTattoo.ImagePath));
+        var decodeTattoo = typeof(MainWindow).GetMethod("DecodeTextureBitmap", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var tattooImage = (BitmapSource)decodeTattoo.Invoke(null, [tattooTexture, 1024])!;
+        File.WriteAllText(Path.Combine(output, "head-tattoo-definition.json"), JsonSerializer.Serialize(headTattoo, new JsonSerializerOptions { WriteIndented = true }));
+        using (var raw = File.Create(Path.Combine(output, "head-tattoo-texture.png")))
+        {
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(tattooImage)); encoder.Save(raw);
+        }
+        PedSurfacePhotos.SaveTattoo(Path.Combine(output, "head-tattoo-applied.png"), headTattoo, tattooImage,
+            PreviewPhotoRenderer.LoadPed(game, "Masculino"), Color.FromRgb(98, 95, 104));
         var identities = ClothingIdentityMap.Read(Path.Combine(output, "gta-clothing-identities.json"));
         if (identities.Entries.Count != catalog.Project.Items.Count) throw new Exception("Incomplete GTA identity map.");
         var optionsType = typeof(MainWindow).Assembly.GetType("FooxClothStudio.PhotoExportOptionsWindow")!;
