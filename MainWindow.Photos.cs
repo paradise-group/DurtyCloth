@@ -278,7 +278,8 @@ public partial class MainWindow
                             var loaded = new YtdFile(); loaded.Load(File.ReadAllBytes(resolveAsset(appearance.TexturePath)));
                             return loaded;
                         });
-                        var textures = AppearancePhotoTextures.Select(ytd, appearance.Name, appearance.DiffuseTextureHash);
+                        var textures = AppearancePhotoTextures.Select(ytd, appearance.Name, appearance.DiffuseTextureHash,
+                            paletteMask: appearance.OverlayCategory is "facialHair" or "eyebrows" or "chestHair" or "blush" or "lipstick");
                         if (textures.Length == 0) throw new InvalidDataException("YTD sem texturas internas.");
                         for (var selectedIndex = 0; selectedIndex < textures.Length; selectedIndex++)
                         {
@@ -305,7 +306,8 @@ public partial class MainWindow
                                     if (appearance.OverlayCategory is null)
                                         throw new InvalidDataException("A aparência não tem uma definição de aplicação no GTA: " + appearance.Name);
                                     path = session.SaveImage(path, temporary => PedSurfacePhotos.SaveAppearance(temporary,
-                                        appearance.OverlayCategory, image, appearancePed, photoBackground, imageOptions), legacyPath);
+                                        appearance.OverlayCategory, image, appearancePed, photoBackground, imageOptions,
+                                        isColourMask: texture.Format == TextureFormat.D3DFMT_A8), legacyPath);
                                 }
                                 else { path = savedPath; reused++; }
                                 if (options.OverwriteExisting || session.NeedsIndexEntry(path))

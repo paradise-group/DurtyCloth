@@ -17,15 +17,21 @@ public static class PedSurfacePhotos
     private static readonly Point[] Samples = [new(0.333, 0.333), new(0.1, 0.1), new(0.8, 0.1), new(0.1, 0.8)];
 
     public static void SaveAppearance(string destination, string category, BitmapSource image,
-        PhotoPed ped, Color background, PhotoImageOptions? options = null)
+        PhotoPed ped, Color background, PhotoImageOptions? options = null, bool isColourMask = false)
     {
         var bodySlot = category is "chestHair" or "bodyBlemishes" or "addBodyBlemishes" ? "uppr" : "head";
+        (options ?? new()).Write(destination, Render(ped, bodySlot, AppearanceOverlay(category, image, ped, isColourMask), background,
+            null, chooseView: false));
+    }
+
+    public static BitmapSource AppearanceOverlay(string category, BitmapSource image, PhotoPed ped, bool isColourMask = false)
+    {
+        var useMakeupPalette = category is "blush" or "lipstick" || category == "makeup" && isColourMask;
         var tint = category is "facialHair" or "eyebrows" or "chestHair" ? Color.FromRgb(38, 28, 23)
-            : category is "blush" or "lipstick" or "makeup" ? Color.FromRgb(140, 45, 55) : (Color?)null;
+            : useMakeupPalette ? Color.FromRgb(140, 45, 55) : (Color?)null;
         var paletteName = category is "facialHair" or "eyebrows" or "chestHair" ? "mp_hair_tint" : "mp_makeup_tint";
         var palette = tint is not null ? ped.OverlayPalettes?.GetValueOrDefault(paletteName) : null;
-        (options ?? new()).Write(destination, Render(ped, bodySlot, Overlay(image, tint, palette), background,
-            null, chooseView: false));
+        return Overlay(image, tint, palette);
     }
 
     public static void SaveTattoo(string destination, TattooItem tattoo, BitmapSource image,
@@ -34,6 +40,8 @@ public static class PedSurfacePhotos
 
     public static BitmapSource RenderTattoo(TattooItem tattoo, BitmapSource image, PhotoPed ped, Color background)
     {
+        if (tattoo.IsHairOverlay)
+            return Render(ped, "head", Overlay(image, Color.FromRgb(38, 28, 23)), background, null, chooseView: false);
         if (string.IsNullOrEmpty(tattoo.Zone))
             throw new InvalidDataException("A tatuagem não tem metadados de posição; não é possível fotografá-la aplicada ao corpo.");
         var bodySlot = tattoo.Zone == "ZONE_HEAD" ? "head"
@@ -50,14 +58,14 @@ public static class PedSurfacePhotos
         using (var drawing = visual.RenderOpen())
         {
             var center = new Point((tattoo.U - Math.Floor(tattoo.U)) * AtlasSize, (1 - tattoo.V) * AtlasSize);
-            var width = Math.Abs(tattoo.ScaleX) * AtlasSize;
-            var height = Math.Abs(tattoo.ScaleY) * AtlasSize;
+            var halfWidth = Math.Abs(tattoo.ScaleX) * AtlasSize;
+            var halfHeight = Math.Abs(tattoo.ScaleY) * AtlasSize;
             foreach (var repeat in new[] { -1, 0, 1 })
             {
                 drawing.PushTransform(new TranslateTransform(repeat * AtlasSize, 0));
                 drawing.PushTransform(new RotateTransform(-tattoo.Rotation, center.X, center.Y));
                 drawing.PushTransform(new ScaleTransform(Math.Sign(tattoo.ScaleX), Math.Sign(tattoo.ScaleY), center.X, center.Y));
-                drawing.DrawImage(image, new Rect(center.X - width / 2, center.Y - height / 2, width, height));
+                drawing.DrawImage(image, new Rect(center.X - halfWidth, center.Y - halfHeight, halfWidth * 2, halfHeight * 2));
                 drawing.Pop(); drawing.Pop(); drawing.Pop();
             }
         }
@@ -107,6 +115,7 @@ public static class PedSurfacePhotos
         var textures = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
         var surfaces = new List<ModelPreviewPart>();
         var affected = new List<Point3D>();
+        var affectedNormals = new List<Vector3D>();
         var alpha = new FormatConvertedBitmap(overlay, PixelFormats.Bgra32, null, 0);
         var pixels = new byte[alpha.PixelWidth * alpha.PixelHeight * 4];
         alpha.CopyPixels(pixels, alpha.PixelWidth * 4, 0);
@@ -165,6 +174,7 @@ public static class PedSurfacePhotos
                     affected.Add(new Point3D(part.Positions[first].X * remainder + part.Positions[second].X * sample.X + part.Positions[third].X * sample.Y,
                         part.Positions[first].Y * remainder + part.Positions[second].Y * sample.X + part.Positions[third].Y * sample.Y,
                         part.Positions[first].Z * remainder + part.Positions[second].Z * sample.X + part.Positions[third].Z * sample.Y));
+                    affectedNormals.Add(normals[first] * remainder + normals[second] * sample.X + normals[third] * sample.Y);
                 }
             }
         }
@@ -174,8 +184,9 @@ public static class PedSurfacePhotos
         var rotation = Matrix3D.Identity;
         if (chooseView && affected.Count > 0)
         {
-            var direction = new Vector3D(affected.Average(point => point.X) - center.X, 0, affected.Average(point => point.Z) - center.Z);
-            var angle = -Math.Atan2(direction.X, direction.Z) * 180 / Math.PI;
+            var direction = new Vector3D(affectedNormals.Average(normal => normal.X), 0, affectedNormals.Average(normal => normal.Z));
+            var angle = Math.Round(-Math.Atan2(direction.X, direction.Z) * 2 / Math.PI) * 90;
+            if (decorationZone == 0) angle = direction.Z >= 0 ? 0 : 180;
             rotation.RotateAt(new Quaternion(new Vector3D(0, 1, 0), angle), center);
         }
         var rotated = parts.Select(part => part with { UsesTextureAlpha = false }).Concat(surfaces)

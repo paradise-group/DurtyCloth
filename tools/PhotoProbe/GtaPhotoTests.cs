@@ -63,7 +63,8 @@ internal static class GtaPhotoTests
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); encoder.Save(raw);
             }
             PedSurfacePhotos.SaveAppearance(Path.Combine(output, appearance.OverlayCategory + "-applied.png"),
-                appearance.OverlayCategory!, image, PreviewPhotoRenderer.LoadPed(game, "Masculino"), Color.FromRgb(98, 95, 104));
+                appearance.OverlayCategory!, image, PreviewPhotoRenderer.LoadPed(game, "Masculino"), Color.FromRgb(98, 95, 104),
+                isColourMask: texture.Format == CodeWalker.GameFiles.TextureFormat.D3DFMT_A8);
         }
         var basePed = PreviewPhotoRenderer.LoadPed(game, "Masculino");
         var tiles = basePed.Parts.Where(part => part.DecorationCoordinates is not null).SelectMany(part =>

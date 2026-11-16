@@ -66,6 +66,7 @@ public sealed class TattooItem
     public string? Collection { get; set; }
     public string? Overlay { get; set; }
     public bool UseTintColour { get; set; }
+    [JsonIgnore] public bool IsHairOverlay => Zone == "ZONE_HEAD" && Overlay?.Contains("_Hair_", StringComparison.OrdinalIgnoreCase) == true;
     public string Gender { get; set; } = "Both";
     public string Zone { get; set; } = "ZONE_TORSO";
     public float U { get; set; } = 0.5f;

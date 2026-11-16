@@ -17,6 +17,22 @@ internal static class SurfacePhotoTests
         var dictionary = new TextureDictionary(); dictionary.BuildFromTextureList([diffuse, normal]);
         var selected = AppearancePhotoTextures.Select(new YtdFile { TextureDict = dictionary }, "replacement_dictionary");
         if (selected.Length != 1 || selected[0] != diffuse) throw new Exception("A normal map was offered as an appearance photo.");
+        Texture AliasedTexture(string name, byte red, byte green, byte blue)
+        {
+            var file = Path.Combine(output, name + ".png");
+            var bitmap = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { blue, green, red, 255 }, 4);
+            using (var stream = File.Create(file))
+            {
+                var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); encoder.Save(stream);
+            }
+            var texture = PngTextureReader.Read(file); texture.Name = name; texture.Usage = TextureUsage.DEFAULT;
+            return texture;
+        }
+        var colourMask = AliasedTexture("q", 33, 97, 0);
+        var normalMask = AliasedTexture("q2", 189, 65, 247);
+        dictionary.BuildFromTextureList([normalMask, colourMask]);
+        if (AppearancePhotoTextures.Select(new YtdFile { TextureDict = dictionary }, "lip_mask", paletteMask: true).Single() != colourMask)
+            throw new Exception("An aliased lip normal map was selected instead of its green palette mask.");
         var alias = new Texture { Name = "q", NameHash = JenkHash.GenHash("declared_overlay"), Usage = TextureUsage.DEFAULT };
         var extra = new Texture { Name = "q2", NameHash = JenkHash.GenHash("other_image"), Usage = TextureUsage.DEFAULT };
         dictionary.BuildFromTextureList([alias, extra]);
@@ -45,6 +61,16 @@ internal static class SurfacePhotoTests
         var white = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 255, 255, 255, 255 }, 4);
         var red = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4);
         var ped = new PhotoPed([part], new Dictionary<string, BitmapSource> { [part.TextureName!] = white }, []);
+        var artworkPixels = new byte[] { 255, 255, 255, 200, 0, 0, 0, 180, 0, 0, 255, 255, 255, 0, 0, 90 };
+        var artwork = BitmapSource.Create(4, 1, 96, 96, PixelFormats.Bgra32, null, artworkPixels, 16);
+        var makeup = PedSurfacePhotos.AppearanceOverlay("makeup", artwork, ped);
+        var makeupPixels = new byte[16]; makeup.CopyPixels(makeupPixels, 16, 0);
+        if (!makeupPixels.SequenceEqual(artworkPixels))
+            throw new Exception("Makeup artwork lost its white, black or flag colours to a palette tint.");
+        var mask = PedSurfacePhotos.AppearanceOverlay("makeup", white, ped, isColourMask: true);
+        var maskPixels = new byte[4]; mask.CopyPixels(maskPixels, 4, 0);
+        if (!maskPixels.SequenceEqual(new byte[] { 55, 45, 140, 255 }))
+            throw new Exception("The alpha-only makeup mask no longer receives its preview colour.");
         foreach (var (position, scale) in new[] { (0.5f, 0.3f), (-0.5f, -0.3f) })
         {
             var file = Path.Combine(output, position < 0 ? "signed-head-decal.png" : "head-decal.png");
@@ -68,6 +94,23 @@ internal static class SurfacePhotoTests
             && lowerPixels[index * 4 + 2] > 2 * lowerPixels[index * 4]).Select(index => index / 128).ToArray();
         if (lowerRows.Length < 30 || lowerRows.Average() <= 64)
             throw new Exception("The native lower-head position was inverted onto the forehead.");
+        var extentFile = Path.Combine(output, "decal-half-extents.png");
+        PedSurfacePhotos.SaveTattoo(extentFile, new TattooItem { Zone = "ZONE_HEAD", U = 0.5f, V = 0.5f,
+            ScaleX = 0.1f, ScaleY = 0.1f }, red, ped, Colors.Gray, new PhotoImageOptions(128));
+        var extentImage = new FormatConvertedBitmap(new BitmapImage(new Uri(extentFile)), PixelFormats.Bgra32, null, 0);
+        var extentPixels = new byte[128 * 128 * 4]; extentImage.CopyPixels(extentPixels, 128 * 4, 0);
+        var extentColumns = Enumerable.Range(0, 128 * 128).Where(index => extentPixels[index * 4 + 2] > 2 * extentPixels[index * 4 + 1]
+            && extentPixels[index * 4 + 2] > 2 * extentPixels[index * 4]).Select(index => index % 128).ToArray();
+        if (extentColumns.Length == 0 || extentColumns.Max() - extentColumns.Min() < 18)
+            throw new Exception("The tattoo scale was halved by treating its extents as full dimensions.");
+        var hairFile = Path.Combine(output, "scalp-overlay.png");
+        PedSurfacePhotos.SaveTattoo(hairFile, new TattooItem { Zone = "ZONE_HEAD", Overlay = "Test_Hair_001",
+            U = 0, V = 0, ScaleX = 0.01f, ScaleY = 0.01f }, white, ped, Colors.Gray, new PhotoImageOptions(128));
+        var hairImage = new FormatConvertedBitmap(new BitmapImage(new Uri(hairFile)), PixelFormats.Bgra32, null, 0);
+        var hairPixels = new byte[128 * 128 * 4]; hairImage.CopyPixels(hairPixels, 128 * 4, 0);
+        if (Enumerable.Range(0, 128 * 128).Count(index => hairPixels[index * 4 + 2] > hairPixels[index * 4 + 1] * 1.1
+            && hairPixels[index * 4 + 2] > hairPixels[index * 4] * 1.2) < 100)
+            throw new Exception("The scalp overlay used the tattoo rectangle instead of the head skin UVs.");
         var body = part with { TextureName = "__ped_uppr_test", DecorationCoordinates = Enumerable.Repeat(new Point(100, 100), 4).ToArray() };
         var bodyPed = new PhotoPed([body], new Dictionary<string, BitmapSource> { [body.TextureName!] = white }, []);
         var bodyFile = Path.Combine(output, "primary-body-overlay.png");
