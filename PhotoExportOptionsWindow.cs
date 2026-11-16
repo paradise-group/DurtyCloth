@@ -39,7 +39,7 @@ internal sealed class PhotoExportOptionsWindow : Window
         var outer = WorkflowUi.Stack(); Content = outer;
         if (sourceDescription is not null)
             outer.Children.Add(new TextBlock { Text = sourceDescription, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
-        var tabs = new TabControl { Height = 420, Margin = new Thickness(0, 0, 0, 12) };
+        var tabs = new TabControl { Height = sourceDescription is null ? 420 : 380, Margin = new Thickness(0, 0, 0, 12) };
         outer.Children.Add(tabs);
         var selection = WorkflowUi.Stack();
         tabs.Items.Add(new TabItem { Header = "O que fotografar", Content = new ScrollViewer { Content = selection, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });

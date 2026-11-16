@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FooxClothStudio;
@@ -30,15 +31,24 @@ internal static class GtaPhotoTests
         catalog.WriteIdentityMap(output);
         var identities = ClothingIdentityMap.Read(Path.Combine(output, "gta-clothing-identities.json"));
         if (identities.Entries.Count != catalog.Project.Items.Count) throw new Exception("Incomplete GTA identity map.");
+        var optionsType = typeof(MainWindow).Assembly.GetType("FooxClothStudio.PhotoExportOptionsWindow")!;
+        var options = (Window)Activator.CreateInstance(optionsType, catalog.Project,
+            "Origem: roupas e acessórios do GTA V instalado, incluindo os DLCs encontrados. Pode usar a mesma pasta das fotos do pack para juntar os dois lotes.")!;
+        var content = (UIElement)options.Content;
+        content.Measure(new Size(options.Width - 20, double.PositiveInfinity));
+        if (content.DesiredSize.Height > options.Height - SystemParameters.CaptionHeight)
+            throw new Exception("GTA photo options overflow the export window.");
+        options.Close();
         var samples = new List<object>();
         var read = typeof(MainWindow).GetMethod("ReadMatchingTextures", BindingFlags.NonPublic | BindingFlags.Static)!;
         foreach (var gender in new[] { "Masculino", "Feminino" })
         {
             foreach (var code in new[] { "jbib", "p_head", "hair" })
             {
-                var item = catalog.Project.Items.First(item => item.Gender == gender
+                var item = catalog.Project.Items.Where(item => item.Gender == gender
                     && item.Category.EndsWith("[" + code + "]") && item.TexturePaths.Count > 0
-                    && (code != "hair" || item.SourceIndex == 4));
+                    && (code != "hair" || item.SourceIndex == 4))
+                    .OrderByDescending(item => code == "jbib" && item.Name.Contains("_2024_01^", StringComparison.OrdinalIgnoreCase)).First();
                 var modelPath = catalog.Resolve(item.ModelPath);
                 var model = ModelPreview.Read(modelPath, false, preserveAllTriangles: true);
                 if (model.SourceTriangles != model.PreviewTriangles) throw new Exception("GTA photo reader discarded geometry.");
