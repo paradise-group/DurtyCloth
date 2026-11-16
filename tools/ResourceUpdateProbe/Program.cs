@@ -106,7 +106,7 @@ try
             Check(File.Exists(Path.Combine(output, declaration.Groups[2].Value)), "Declared metadata missing");
     }
 
-    var root = Path.GetFullPath(args[^1]);
+    var root = args.Length == 0 ? Path.Combine(Path.GetTempPath(), "ResourceUpdateProbe", Guid.NewGuid().ToString("N")) : Path.GetFullPath(args[^1]);
     Directory.CreateDirectory(root);
     if (args.Length is 4 or 5 && args[0] == "--real")
     {
@@ -132,7 +132,7 @@ try
         return;
     }
 
-    Check(args.Length == 1, "Use an empty fixture folder, or --real resourceRoot incomingFolder outputParent");
+    Check(args.Length <= 1, "Use an empty fixture folder, or --real resourceRoot incomingFolder outputParent");
     var sourceRoot = Path.Combine(root, "original");
     var stream = Path.Combine(sourceRoot, "stream");
     Directory.CreateDirectory(stream);
@@ -226,12 +226,59 @@ try
     Check(entryAfter.Textures.Single(texture => texture.Id == entryBefore.Textures[0].Id).Index == 1,
         "Reordered added textures lost their UUIDs");
 
+    ClothItem RawItem(string folder, string gender, string code, int index)
+    {
+        Directory.CreateDirectory(folder);
+        var model = Path.Combine(folder, $"{code}_{index:D3}_u.ydd");
+        var texture = Path.Combine(folder, $"{code}_diff_{index:D3}_a_uni.ytd");
+        File.WriteAllBytes(model, [1, 2, 3]);
+        File.WriteAllBytes(texture, [4, 5, 6]);
+        var item = ClothCatalog.Import([model, texture]).Single();
+        item.Gender = gender;
+        item.Id = Guid.NewGuid();
+        item.TextureIds.Clear();
+        ClothingIdentityMap.EnsureTextures(item);
+        return item;
+    }
+
+    var raw = new ClothProject { Name = "original", Items = [oldItem] };
+    foreach (var gender in new[] { "Masculino", "Feminino" })
+    {
+        var folder = Path.Combine(root, "raw-incoming", gender);
+        foreach (var code in new[] { "jbib", "lowr", "p_head" })
+        for (var index = 0; index < 45; index++)
+            raw.Items.Add(RawItem(folder, gender, code, index));
+        raw.Items.Add(RawItem(Path.Combine(folder, "department"), gender, "jbib", 0));
+    }
+    var rawOutput = ResourceUpdateExporter.Export(raw, Path.GetFullPath, sourceRoot, Path.Combine(root, "raw"));
+    var rawMap = ClothingIdentityMap.Read(Path.Combine(rawOutput, ClothingIdentityMap.FileName));
+    var rawAdded = rawMap.Entries.Where(entry => entry.Id != oldItem.Id).ToArray();
+    Check(rawAdded.GroupBy(entry => entry.Collection).Count() == 2
+        && rawAdded.GroupBy(entry => entry.Gender).All(group => group.Select(entry => entry.Collection).Distinct().Count() == 1),
+        "Raw models must share one collection per gender across slots, filenames and folders");
+    const string metadataDeclaration = "files { 'data/pcs/*' }";
+    Check(File.ReadAllLines(Path.Combine(rawOutput, "fxmanifest.lua")).Count(line => line == metadataDeclaration) == 1,
+        "Added metadata glob must be declared exactly once");
+    Check(File.ReadAllLines(Path.Combine(second, "fxmanifest.lua")).Count(line => line == metadataDeclaration) == 1,
+        "Existing metadata glob must not be duplicated");
+    var rawReversed = new ClothProject { Name = "original", Items = raw.Items.AsEnumerable().Reverse().ToList() };
+    var rawRepeated = ResourceUpdateExporter.Export(rawReversed, Path.GetFullPath, sourceRoot, Path.Combine(root, "raw-repeated"));
+    var repeatedMap = ClothingIdentityMap.Read(Path.Combine(rawRepeated, ClothingIdentityMap.FileName));
+    foreach (var entry in rawAdded)
+    {
+        var repeated = repeatedMap.Entries.Single(item => item.Id == entry.Id);
+        Check(entry.Collection == repeated.Collection && entry.Index == repeated.Index, "Input order changed raw collection addresses");
+    }
+    Verify(sourceRoot, rawOutput, baseline, raw.Items.Count - 1);
+
     var paged = new ClothProject { Name = "original", Items = [oldItem] };
     for (var index = 0; index <= CollectionIndices.DrawablesPerSlot; index++)
         paged.Items.Add(Item(Path.Combine(root, "many-incoming"), "paged", index));
     var pagedOutput = ResourceUpdateExporter.Export(paged, Path.GetFullPath, sourceRoot, Path.Combine(root, "paged"));
     var pagedMap = ClothingIdentityMap.Read(Path.Combine(pagedOutput, ClothingIdentityMap.FileName));
     Check(pagedMap.Entries.Where(entry => entry.Id != oldItem.Id).GroupBy(entry => entry.Collection).Count() == 2, "Large additions not split into native-capacity collections");
+    Check(pagedMap.Entries.Where(entry => entry.Id != oldItem.Id).GroupBy(entry => (entry.Collection, entry.Kind, entry.Slot))
+        .All(group => group.Count() <= CollectionIndices.DrawablesPerSlot), "Collection exceeds per-slot drawable capacity");
     Verify(sourceRoot, pagedOutput, baseline, CollectionIndices.DrawablesPerSlot + 1);
     Console.WriteLine("PASS: incremental additions, metadata declarations, original bytes and UUIDs, repeated update/reimport, removal/asset/ID guards and collection capacity paging.");
 

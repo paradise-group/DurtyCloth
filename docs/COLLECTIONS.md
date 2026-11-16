@@ -4,6 +4,11 @@ Para salvar roupas como `collection + localIndex`, mantenha os índices já usad
 Cada projeto contém uma collection por gênero (com componentes e props); para expandir além
 de 128 drawables no mesmo slot, crie outro projeto com outro DLC name e publique outro recurso.
 
+Atualizações de recursos pelo MCP também usam uma coleção nova por gênero por
+atualização para peças sem prefixo de origem `^`, reunindo componentes e props;
+só a capacidade de 128 drawables por slot permite divisão adicional no mesmo
+recurso. Consulte as regras e o checklist em [MCP.md](MCP.md#antes-de-aplicar-uma-atualização-preparada-ao-recurso-do-servidor).
+
 1. Gere e confira o addon. Em **Project Settings > General**, marque **Collection publicada**
    e aplique, confirmando que a ordem atual corresponde à publicação. Salve o `.fcsproj`.
 2. O snapshot grava DLC name, prefixo e, por gênero/slot/localIndex, o `Guid` persistido da peça.

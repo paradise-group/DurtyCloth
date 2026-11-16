@@ -62,6 +62,9 @@ public static class ResourceUpdateExporter
                 progress?.Report("Applying native index shifts and updated collection metadata...");
                 CollectionInsertion.Apply(insertion, output);
             }
+            const string metadataDeclaration = "files { 'data/pcs/*' }";
+            if (exports.Count > 0 && !File.ReadAllLines(manifest).Contains(metadataDeclaration, StringComparer.Ordinal))
+                File.AppendAllText(manifest, "\n" + metadataDeclaration + "\n");
             foreach (var export in exports)
             {
                 progress?.Report("Adding clothing collection: " + export.Name);
@@ -100,9 +103,13 @@ public static class ResourceUpdateExporter
         string temporary, string? gameFolder, IProgress<string>? progress)
     {
         var result = new List<AddedExport>();
-        var groups = additions.GroupBy(item => (item.Gender, item.Category, Prefix: ModelName(item).Split('^')[0]));
+        var groups = additions.GroupBy(item => (item.Gender, Prefix: SourceCollection(item)))
+            .OrderBy(group => group.Key.Gender, StringComparer.Ordinal).ThenBy(group => group.Key.Prefix, StringComparer.Ordinal);
         foreach (var group in groups)
-        foreach (var page in group.OrderBy(item => item.Id).Chunk(CollectionIndices.DrawablesPerSlot))
+        foreach (var page in group.GroupBy(item => CollectionIndices.CodeOf(item.Category))
+            .SelectMany(slot => slot.OrderBy(item => item.Id).Select((item, index) => new { Item = item, Page = index / CollectionIndices.DrawablesPerSlot }))
+            .GroupBy(entry => entry.Page).OrderBy(page => page.Key)
+            .Select(page => page.Select(entry => entry.Item).OrderBy(item => item.Id).ToArray()))
         {
             var name = "pcs_" + page[0].Id.ToString("N");
             var project = new ClothProject
@@ -119,7 +126,7 @@ public static class ResourceUpdateExporter
             var root = AddonExporter.Export(project, resolve, temporary);
             var identities = ClothingIdentityMap.Read(Path.Combine(root, ClothingIdentityMap.FileName));
             var metadataRoot = "data/pcs/";
-            var declarations = "files { '" + metadataRoot + "*' }\n";
+            var declarations = "";
             foreach (Match declaration in Regex.Matches(File.ReadAllText(Path.Combine(root, "fxmanifest.lua")),
                 @"(?m)^data_file\s+'([^']+)'\s+'([^']+)'\s*$"))
                 declarations += "data_file '" + declaration.Groups[1].Value + "' '" + metadataRoot + MetadataName(root, declaration.Groups[2].Value) + "'\n";
@@ -164,6 +171,13 @@ public static class ResourceUpdateExporter
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.Copy(file.Source, destination);
         }
+    }
+
+    private static string SourceCollection(ClothItem item)
+    {
+        var name = ModelName(item);
+        var separator = name.IndexOf('^');
+        return separator < 0 ? "" : name[..separator].ToLowerInvariant();
     }
 
     private static string ModelName(ClothItem item) => Path.GetFileName(item.OriginalModelFileName ?? item.ModelPath);

@@ -52,7 +52,10 @@ criar a saída. Peças sem YTD precisam de um pacote com as dependências resolv
 O exportador copia o recurso completo, confere SHA-256 e acrescenta coleções novas
 no mesmo recurso. Mantém UUIDs, coleções e índices nativos das peças existentes;
 não oferece inserção antes de peças publicadas nem substituição por este MCP.
-As novas coleções são divididas respeitando a capacidade do exportador.
+Peças sem prefixo de coleção de origem antes de `^` são agrupadas apenas por
+gênero: uma coleção nova por gênero por atualização. Categoria/slot não divide
+coleções; componentes e props compartilham a mesma. Uma divisão adicional só
+ocorre ao exceder 128 drawables em algum slot (`CollectionIndices.DrawablesPerSlot`).
 A repetição do mesmo pacote no recurso já atualizado é rejeitada pelos UUIDs.
 
 A preparação pode copiar dezenas de GB. Configure um tempo de execução adequado
@@ -65,7 +68,9 @@ A saída contém:
 
 - `<nome-do-recurso>/`: recurso FiveM com arquivos originais e roupas novas.
 - `update-report.json`: origem, contagens, verificações, problemas preexistentes,
-  e cada roupa/textura adicionada com UUID, collection e índice local.
+  e cada roupa/textura adicionada com UUID, collection e índice local. O array
+  `addedCollections`, no nível superior, lista cada coleção nova como
+  `{ "collection", "gender", "items" }`.
 - `update.fcsproj`: projeto para abrir no Studio, com referências absolutas aos
   assets originais e ao pacote extraído. Salve pela interface para copiar os assets
   para um projeto portátil antes de mover ou apagar essas pastas.
@@ -96,6 +101,30 @@ qualidade 85 e o mesmo fundo cinza da exportação pela interface. O manifesto
 `photo-manifest.json` registra peça, textura, endereço nativo, caminho e SHA-256.
 Não registra fotos automaticamente no servidor nem publica na CDN.
 
+## Antes de aplicar uma atualização preparada ao recurso do servidor
+
+- Confira se `addedCollections` tem tantas entradas quanto gêneros no pacote;
+  mais coleções só são válidas quando algum slot excede 128 drawables.
+- Confira se as quantidades de `.ymt` de coleção e `_shop.meta` adicionados
+  correspondem à quantidade de entradas em `addedCollections`.
+- Confira se `files { 'data/pcs/*' }` aparece uma única vez no manifesto.
+- Compare com a origem: quantidade de entradas originais, coleções, índices e
+  UUIDs de peças/texturas devem ser preservados.
+- Execute `validate_clothing_resource` na origem e na saída: nenhum diagnóstico novo.
+
+Mais coleções que o previsto é um bug a corrigir na ferramenta antes de aplicar,
+comitar ou publicar. Informe ao usuário a quantidade de coleções criadas antes
+dessas operações; preparação não autoriza commit nem push.
+
+UUIDs de peças e texturas independem da coleção. `collection` e `index` só podem
+mudar antes do uso da peça no jogo; após uso em roupas salvas ou presets de
+vestiário, ficam congelados. Fotos em `D:/Git/web-assets` usam
+`<itemId>.<textureId>`; o `clothingAddresses` de
+`D:/Git/high/resources/vrp/config/AppearanceImages.json` usa
+`gender|kind|slot|collection|index|texture` e precisa acompanhar qualquer mudança
+de coleção/índice antes desse uso. Publique na ordem `web-assets` →
+`high-clothes-s3` → `high`.
+
 ## Verificar o MCP
 
 ```powershell
@@ -124,7 +153,16 @@ O pacote `ROUPAS_POLICIA_HIGH.rar` fornecido em 16/11/2026 foi extraído em
 e acrescentando 38 peças (19 por gênero), com os 416 arquivos YTD do pacote.
 O relatório completo está em `outputs/police-high-mcp/update-report.json`.
 
-A validação inspecionou 28 YMTs, 25 shops e 5.107 UUIDs de peças. Três YMTs
+Na primeira aplicação, foram criadas 17 coleções: a chave de agrupamento usava
+`(Gender, Category, nome antes de '^')` e, sem `^`, o próprio nome do arquivo
+abria outra coleção. Com o agrupamento corrigido, a atualização foi refeita a
+partir do recurso anterior à primeira aplicação e gerou duas coleções, uma por
+gênero, com 19 peças cada (`outputs/police-high-mcp-v2`). Os 38 UUIDs de peças
+e os 416 de texturas ficaram iguais aos da primeira aplicação, com os mesmos
+arquivos; mudaram apenas `collection`, `index` e os nomes nativos, e as 416
+chaves de `clothingAddresses` foram reescritas para os novos endereços.
+
+A validação da primeira preparação inspecionou 28 YMTs, 25 shops e 5.107 UUIDs de peças. Três YMTs
 `mp_creaturemetadata_*` da origem usam uma compressão que o leitor local não
 conseguiu decodificar; os mesmos três diagnósticos aparecem na cópia, sem
 diagnósticos novos. Isso não demonstra que esses arquivos estejam defeituosos.

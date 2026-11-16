@@ -200,6 +200,9 @@ public static class ClothingOperations
             var report = new { sourceRoot = resourceRoot, packageRoot, output, originalItems = original.Entries.Count,
                 addedItems = added.Length, addedTextureFiles = package.Textures, originalIdsAndAddressesPreserved = true,
                 originalFilesHashVerified = true, baselineValidationErrors = baseline.Errors, validation,
+                addedCollections = added.GroupBy(entry => new { entry.Collection, entry.Gender })
+                    .OrderBy(group => group.Key.Collection, StringComparer.Ordinal)
+                    .Select(group => new { collection = group.Key.Collection, gender = group.Key.Gender, items = group.Count() }).ToArray(),
                 additions = added, deployment = "Prepared only. Faction wardrobe configuration and in-game testing are separate steps." };
             var reportPath = Path.Combine(outputParent, "update-report.json");
             File.WriteAllText(reportPath, JsonSerializer.Serialize(report, JsonOptions));
