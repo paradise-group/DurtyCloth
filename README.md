@@ -145,6 +145,11 @@ o cabelo usado em jogo precisa suportar o controle MH_Hair_Scale.
 
 ## Executar
 
+O aplicativo também oferece um [MCP local para roupas](docs/MCP.md): inspeção de
+pacotes/recursos, validação, preparação de uma cópia atualizada do recurso FiveM
+e prévias WebP por UUID. Mantém os índices e UUIDs existentes. Veja o guia para
+compilar e conectar.
+
 ```powershell
 dotnet run --project D:\FooxClothStudio\FooxClothStudio.csproj
 ```

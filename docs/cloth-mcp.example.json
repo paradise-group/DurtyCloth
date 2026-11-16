@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "paradise-clothes": {
+      "command": "D:/Git/DurtyCloth/publish-mcp/ParadiseClothMcp.exe",
+      "args": []
+    }
+  }
+}
