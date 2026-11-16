@@ -8,7 +8,7 @@ namespace FooxClothStudio;
 
 public static class FiveMPhotoCatalog
 {
-    public static async Task<ServerPhotoCatalog> ReadAsync()
+    public static async Task<ServerPhotoCatalog> ReadAsync(string? snapshotPath = null)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
@@ -30,7 +30,18 @@ public static class FiveMPhotoCatalog
             var contextId = context.GetProperty("id").GetInt32();
             await Evaluate(socket, 2, contextId, "status", 4000, contexts, timeout.Token);
             var result = await Evaluate(socket, 3, contextId, "capture", 150000, contexts, timeout.Token);
-            return ServerPhotoCatalog.Parse(result);
+            var catalog = ServerPhotoCatalog.Parse(result);
+            var targetPath = Path.GetFullPath(snapshotPath ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ParadiseClothStudio", "server-photo-catalog.json"));
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+            var temporary = targetPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temporary, result.GetRawText(), cancellationToken: timeout.Token);
+                File.Move(temporary, targetPath, true);
+            }
+            finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            return catalog;
         }
         catch (HttpRequestException)
         {

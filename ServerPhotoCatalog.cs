@@ -56,7 +56,8 @@ public sealed class ServerPhotoCatalog
             var address = Address(entry.Model, entry.Kind, entry.Slot, entry.Collection, entry.Index);
             if (!_entries.TryGetValue(address, out var allowed)) continue;
             var indices = entry.Textures.Where(texture => !texture.Inherited && allowed.Contains(texture.Index))
-                .Select(texture => texture.Id).ToHashSet();
+                .OrderBy(texture => texture.Index).ThenBy(texture => texture.AliasOf is not null)
+                .Take(1).Select(texture => texture.Id).ToHashSet();
             var positions = Enumerable.Range(0, item.TextureIds.Count).Where(index => indices.Contains(item.TextureIds[index])).ToArray();
             if (positions.Length == 0) continue;
             selected.Add(new ClothItem

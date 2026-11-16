@@ -89,7 +89,7 @@ public partial class MainWindow
         var photoBackground = options.PhotoBackground;
         var includePed = settings.includePed;
         var session = new PhotoExportSession(output, options.OverwriteExisting);
-        var total = items.Sum(item => Math.Max(1, item.TexturePaths.Count)) +
+        var total = items.Length +
             tattoos.Sum(tattoo => options.ExportGenders(tattoo.Gender).Length) +
             appearances.Sum(appearance => options.ExportGenders(appearance.Gender).Length);
         var progress = new PhotoExportProgressWindow(total) { Owner = this };
@@ -109,7 +109,7 @@ public partial class MainWindow
             foreach (var item in items)
             {
                 if (progress.CancelRequested) break;
-                var variants = item.TexturePaths.Count == 0 ? new[] { -1 } : Enumerable.Range(0, item.TexturePaths.Count).ToArray();
+                var variants = item.TexturePaths.Count == 0 ? new[] { -1 } : new[] { 0 };
                 string DrawablePath(int variant) => Path.Combine(output, SafePhotoName(item.Gender), SafePhotoName(item.Category),
                     item.Id.ToString("D") + "." + (variant < 0 ? "sem_textura" : item.TextureIds[variant].ToString("D")) + imageOptions.Extension);
                 var existing = new Dictionary<int, string>();
@@ -335,7 +335,7 @@ public partial class MainWindow
             await index.FlushAsync();
             File.WriteAllText(Path.Combine(output, "LEIA-ME.txt"),
                 "Fotografias da prévia offline do Paradise Cloth Studio.\n" +
-                "Cada drawable tem uma imagem por variante YTD. O enquadramento usa a geometria da peça.\n" +
+                "Cada peça tem uma fotografia com a primeira textura disponível. O enquadramento usa a geometria da peça.\n" +
                 "As tatuagens do projeto são mostradas no ped por uma projeção aproximada; a posição exata no GTA pode diferir.\n" +
                 "Tatuagens sem zona mostram a textura ao lado do ped, sem aplicação na pele.\n" +
                 "Olhos, pelos, maquilhagem e outras texturas de aparência também usam projeção aproximada no ped.\n" +

@@ -13,6 +13,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 3 && args[0] == "--export-server-photos")
+        {
+            try { ServerPhotoBatch.Run(args[1], args[2]); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 4 && args[0] == "--live-server-photo-check")
         {
             try { ServerPhotoTests.RunLive(args[1], args[2], args[3]); }

@@ -170,7 +170,8 @@ def prepare(source, destination, identities):
     for entry in document["entries"]:
         if not entry.get("available", True):
             continue
-        for texture in entry["textures"]:
+        available = [texture for texture in entry["textures"] if texture.get("available", True)]
+        for texture in sorted(available, key=lambda texture: texture["index"])[:1]:
             if texture.get("available", True) and (entry["id"], texture["id"]) not in mapped:
                 missing.append({"itemId": entry["id"], "textureId": texture["id"], "name": entry["name"],
                     "index": texture["index"], "inherited": texture.get("inherited", False)})
@@ -192,6 +193,7 @@ def prepare(source, destination, identities):
             "Existing nations3 folders are retained; UUID filenames and original image bytes are unchanged.",
             "Unclassified images remain in pending, outside the upload folder.",
             "The server image manifest must be regenerated to associate appearance and tattoo catalog entries.",
+            "Coverage checks require only the first available texture per item; additional color variants are optional.",
             "Missing inherited texture variants are reported; no placeholder images or guessed aliases were created."]}
     (destination / "report.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     with (destination / "missing-images.csv").open("w", newline="", encoding="utf-8-sig") as stream:
