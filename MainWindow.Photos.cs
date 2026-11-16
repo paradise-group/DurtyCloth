@@ -13,28 +13,50 @@ namespace FooxClothStudio;
 public partial class MainWindow
 {
     private async void ExportPreviewPhotos_Click(object sender, RoutedEventArgs e)
-        => await ExportPreviewPhotosAsync(_project, AbsoluteAssetPath);
-
-    private async void ExportGtaPhotos_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFolderDialog
-        {
-            Title = "Selecione a pasta do GTA V instalado",
-            InitialDirectory = GamePedAssets.FindGameFolder() ?? ""
-        };
-        if (picker.ShowDialog(this) != true) return;
         try
         {
+            var serverCatalog = RunWithLoading("Fotografias do servidor", "A obter as peças disponíveis no FiveM...",
+                _ => FiveMPhotoCatalog.ReadAsync().GetAwaiter().GetResult());
+            var gameFolder = GamePedAssets.FindGameFolder();
+            if (gameFolder is null)
+            {
+                var picker = new OpenFolderDialog { Title = "Selecione a pasta do GTA V instalado" };
+                if (picker.ShowDialog(this) != true) return;
+                gameFolder = picker.FolderName;
+            }
             var catalog = RunWithLoading("Fotografias do GTA V", "A localizar roupas e acessórios do GTA instalado...",
-                progress => GtaPhotoCatalog.Scan(picker.FolderName, progress: progress));
+                progress => GtaPhotoCatalog.Scan(gameFolder, progress: progress));
+            var filtered = serverCatalog.Filter(catalog.Project);
+            Status($"Catálogo do servidor: {filtered.MatchedItems} peças e {filtered.Textures} texturas presentes no GTA; {filtered.UnmatchedItems} peças sem origem nesta instalação.");
             if (catalog.Warnings.Count > 0)
                 MessageBox.Show(this, $"Foram encontrados {catalog.Warnings.Count} avisos ao ler os arquivos do GTA. A exportação inclui apenas os arquivos que puderam ser lidos.",
                     "Fotografias do GTA V", MessageBoxButton.OK, MessageBoxImage.Warning);
-            await ExportPreviewPhotosAsync(catalog.Project, catalog.Resolve, picker.FolderName, catalog.WriteIdentityMap);
+            var combined = new ClothProject
+            {
+                Name = _project.Name, Items = _project.Items.ToList(), Tattoos = _project.Tattoos.ToList(),
+                AppearanceAssets = _project.AppearanceAssets.ToList()
+            };
+            var projectIds = combined.Items.Select(item => item.Id).ToHashSet();
+            foreach (var item in catalog.Project.Items.Where(item => !projectIds.Contains(item.Id)))
+                combined.Items.Add(new ClothItem
+                {
+                    Id = item.Id, Name = item.Name, Gender = item.Gender, Category = item.Category, SourceIndex = item.SourceIndex,
+                    ModelPath = "gta://" + item.ModelPath, OriginalModelFileName = item.OriginalModelFileName,
+                    TexturePaths = item.TexturePaths.Select(path => "gta://" + path).ToList(), TextureIds = item.TextureIds.ToList(),
+                    OriginalTextureFileNames = item.OriginalTextureFileNames.ToList()
+                });
+            string ResolvePhotoAsset(string path) => path.StartsWith("gta://", StringComparison.Ordinal)
+                ? catalog.Resolve(path[6..]) : AbsoluteAssetPath(path);
+            await ExportPreviewPhotosAsync(combined, ResolvePhotoAsset, gameFolder, catalog.WriteIdentityMap);
         }
         catch (Exception error)
         {
-            MessageBox.Show(this, error.Message, "Fotografias do GTA V", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (_project.Items.Count + _project.Tattoos.Count + _project.AppearanceAssets.Count == 0)
+                MessageBox.Show(this, error.Message, "Fotografias do servidor", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else if (MessageBox.Show(this, error.Message + "\n\nContinuar apenas com as fotografias do projeto carregado?",
+                "GTA do servidor indisponível", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                await ExportPreviewPhotosAsync(_project, AbsoluteAssetPath);
         }
     }
 
@@ -50,7 +72,7 @@ public partial class MainWindow
             return;
         }
         var options = new PhotoExportOptionsWindow(project, sourceGameFolder is null ? null :
-            "Origem: roupas e acessórios do GTA V instalado, incluindo os DLCs encontrados. Pode usar a mesma pasta das fotos do pack para juntar os dois lotes.") { Owner = this };
+            "Projeto carregado + peças do GTA disponíveis no servidor. Use a pasta consolidada e ignore UUIDs existentes para fotografar só o que falta.") { Owner = this };
         if (options.ShowDialog() != true) return;
         items = items.Where(options.IncludesItem).ToArray();
         tattoos = tattoos.Where(options.IncludesTattoo).ToArray();

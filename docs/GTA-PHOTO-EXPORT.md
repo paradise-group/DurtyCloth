@@ -1,9 +1,20 @@
 # Fotografias das roupas do GTA V
 
-Em **Options → Export photos from installed GTA V**, escolha a pasta que contém
-`x64v.rpf`. O programa procura roupas, cabelos e acessórios freemode masculinos e
-femininos nos arquivos base e nos DLCs instalados. A pasta `mods` é excluída.
-Esta opção funciona sem abrir um projeto e não altera o projeto carregado.
+Use **Options → Export preview photos**, com o FiveM ligado ao servidor. Não existe
+uma opção separada para o GTA nem é necessário exportar um catálogo manualmente.
+O programa lê automaticamente as peças e texturas disponíveis para os modelos
+masculino e feminino, respeitando as regras das lojas configuradas. A leitura usa
+peds temporários invisíveis; a aparência do jogador permanece intacta.
+
+O recurso `skinshop` precisa da versão que inclui `client/photo-catalog.lua`.
+Depois de atualizar os arquivos, reinicie esse recurso uma vez. O programa consulta
+a NUI local do FiveM para obter o catálogo completo dos dois modelos.
+
+A instalação do GTA é detetada automaticamente. Se não estiver configurada, escolha
+a pasta que contém `x64v.rpf`. O programa procura os modelos nos arquivos base e
+nos DLCs instalados, exclui a pasta `mods` e mantém apenas as peças e texturas que
+existem no catálogo do servidor. Junta-as ao projeto carregado, com prioridade para
+as peças do pack que já têm o mesmo UUID, sem alterar o projeto aberto.
 
 Na janela seguinte, escolha categorias, géneros e opções da imagem. Pode usar a
 mesma pasta das fotos do pack: **Ignorar fotografias com o mesmo UUID** é a opção
@@ -11,6 +22,11 @@ por defeito. **Substituir** troca apenas as fotografias selecionadas que já exi
 Também é possível cancelar e voltar a executar a exportação, aproveitando as fotos
 guardadas. Os arquivos do GTA são apenas lidos; os assets necessários são extraídos
 para uma cache separada.
+
+Se o FiveM ou o catálogo atualizado não estiver disponível, o programa informa
+o motivo e permite continuar apenas com o projeto carregado. Não exporta a biblioteca
+inteira do GTA como alternativa. O total de texturas vem dos natives para cada peça,
+sem um limite fixo de 256.
 
 Os UUIDs seguem a mesma regra dos modelos originais importados no projeto.
 O arquivo `gta-clothing-identities.json`, guardado junto às fotos, associa os UUIDs
