@@ -13,16 +13,44 @@ namespace FooxClothStudio;
 public partial class MainWindow
 {
     private async void ExportPreviewPhotos_Click(object sender, RoutedEventArgs e)
+        => await ExportPreviewPhotosAsync(_project, AbsoluteAssetPath);
+
+    private async void ExportGtaPhotos_Click(object sender, RoutedEventArgs e)
     {
-        var items = _project.Items.Where(item => !item.IsDummy).ToArray();
-        var tattoos = _project.Tattoos.ToArray();
-        var appearances = _project.AppearanceAssets.ToArray();
+        var picker = new OpenFolderDialog
+        {
+            Title = "Selecione a pasta do GTA V instalado",
+            InitialDirectory = GamePedAssets.FindGameFolder() ?? ""
+        };
+        if (picker.ShowDialog(this) != true) return;
+        try
+        {
+            var catalog = RunWithLoading("Fotografias do GTA V", "A localizar roupas e acessórios do GTA instalado...",
+                progress => GtaPhotoCatalog.Scan(picker.FolderName, progress: progress));
+            if (catalog.Warnings.Count > 0)
+                MessageBox.Show(this, $"Foram encontrados {catalog.Warnings.Count} avisos ao ler os arquivos do GTA. A exportação inclui apenas os arquivos que puderam ser lidos.",
+                    "Fotografias do GTA V", MessageBoxButton.OK, MessageBoxImage.Warning);
+            await ExportPreviewPhotosAsync(catalog.Project, catalog.Resolve, picker.FolderName, catalog.WriteIdentityMap);
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(this, error.Message, "Fotografias do GTA V", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task ExportPreviewPhotosAsync(ClothProject project, Func<string, string> resolveAsset,
+        string? sourceGameFolder = null, Action<string>? prepareOutput = null)
+    {
+        var items = project.Items.Where(item => !item.IsDummy).ToArray();
+        var tattoos = project.Tattoos.ToArray();
+        var appearances = project.AppearanceAssets.ToArray();
         if (items.Length == 0 && tattoos.Length == 0 && appearances.Length == 0)
         {
             MessageBox.Show(this, "O projeto não contém peças nem tatuagens para exportar.", "Exportar fotografias");
             return;
         }
-        var options = new PhotoExportOptionsWindow(_project) { Owner = this };
+        var options = new PhotoExportOptionsWindow(project, sourceGameFolder is null ? null :
+            "Origem: roupas e acessórios do GTA V instalado, incluindo os DLCs encontrados. Pode usar a mesma pasta das fotos do pack para juntar os dois lotes.") { Owner = this };
         if (options.ShowDialog() != true) return;
         items = items.Where(options.IncludesItem).ToArray();
         tattoos = tattoos.Where(options.IncludesTattoo).ToArray();
@@ -45,8 +73,9 @@ public partial class MainWindow
         var progress = new PhotoExportProgressWindow(total) { Owner = this };
         var reused = 0; var written = 0; var failed = 0; var unplaced = 0; var completed = 0;
         var pedCache = new Dictionary<string, PhotoPed>(StringComparer.OrdinalIgnoreCase);
-        var configuredGameFolder = GamePedAssets.FindGameFolder();
+        var configuredGameFolder = sourceGameFolder ?? GamePedAssets.FindGameFolder();
         Directory.CreateDirectory(output);
+        prepareOutput?.Invoke(output);
         var settingsPath = Path.Combine(output, "export-settings.json");
         var settingsJson = JsonSerializer.Serialize(settings, JsonOptions);
         File.WriteAllText(settingsPath, settingsJson);
@@ -68,7 +97,7 @@ public partial class MainWindow
                 if (progress.CancelRequested) break;
                 ModelPreviewData? model = null;
                 string? modelError = null;
-                try { if (existing.Count != variants.Length) model = await Task.Run(() => ModelPreview.Read(AbsoluteAssetPath(item.ModelPath), false, preserveAllTriangles: true)); }
+                try { if (existing.Count != variants.Length) model = await Task.Run(() => ModelPreview.Read(resolveAsset(item.ModelPath), false, preserveAllTriangles: true)); }
                 catch (Exception ex) { modelError = ex.Message; }
                 var slot = item.Category.Contains('[') ? item.Category.Split('[').Last().TrimEnd(']') : "";
                 var needsPed = slot is "head" or "hair" or "berd" or "p_eyes" or "p_ears" or "p_mouth";
@@ -109,7 +138,7 @@ public partial class MainWindow
                             if (needsPed && ped is null) throw new InvalidDataException(pedError ?? "Ped base indisponível.");
                             var images = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
                             if (variant >= 0 && !string.IsNullOrWhiteSpace(item.TexturePaths[variant]))
-                                images = await Task.Run(() => ReadMatchingTextures(AbsoluteAssetPath(item.TexturePaths[variant]), model));
+                                images = await Task.Run(() => ReadMatchingTextures(resolveAsset(item.TexturePaths[variant]), model));
                             Directory.CreateDirectory(folder);
                             path = session.SaveImage(path, temporary => PreviewPhotoRenderer.Save(temporary, model, images, ped, item.Category, photoBackground, imageOptions));
                         }
@@ -154,7 +183,7 @@ public partial class MainWindow
                                     unplacedPed = await Task.Run(() => PreviewPhotoRenderer.LoadPed(configuredGameFolder, tattooGender));
                                     pedCache[tattooGender] = unplacedPed;
                                 }
-                                var texture = await Task.Run(() => TattooExporter.ReadImage(tattoo, AbsoluteAssetPath(tattoo.ImagePath)));
+                                var texture = await Task.Run(() => TattooExporter.ReadImage(tattoo, resolveAsset(tattoo.ImagePath)));
                                 var image = DecodeTextureBitmap(texture, 1024);
                                 Directory.CreateDirectory(folder);
                                 path = session.SaveImage(path, temporary => PreviewPhotoRenderer.SaveUnplacedTattoo(temporary, image, unplacedPed, photoBackground, imageOptions), legacyPath);
@@ -191,7 +220,7 @@ public partial class MainWindow
                                 tattooPed = await Task.Run(() => PreviewPhotoRenderer.LoadPed(configuredGameFolder, tattooGender));
                                 pedCache[tattooGender] = tattooPed;
                             }
-                            var texture = await Task.Run(() => TattooExporter.ReadImage(tattoo, AbsoluteAssetPath(tattoo.ImagePath)));
+                            var texture = await Task.Run(() => TattooExporter.ReadImage(tattoo, resolveAsset(tattoo.ImagePath)));
                             var image = DecodeTextureBitmap(texture, 1024);
                             Directory.CreateDirectory(folder);
                             path = session.SaveImage(path, temporary => PreviewPhotoRenderer.SaveTattoo(temporary, tattoo, image, tattooPed, photoBackground, imageOptions), legacyPath);
@@ -222,7 +251,7 @@ public partial class MainWindow
                     {
                         var ytd = await Task.Run(() =>
                         {
-                            var loaded = new YtdFile(); loaded.Load(File.ReadAllBytes(AbsoluteAssetPath(appearance.TexturePath)));
+                            var loaded = new YtdFile(); loaded.Load(File.ReadAllBytes(resolveAsset(appearance.TexturePath)));
                             return loaded;
                         });
                         var textures = (ytd.TextureDict?.Textures?.data_items ?? []).Where(texture => texture is not null).ToArray();

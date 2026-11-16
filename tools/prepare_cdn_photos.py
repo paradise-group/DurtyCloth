@@ -20,9 +20,51 @@ def uuid(value):
     return str(UUID(value))
 
 
+def load_identities(source, identities):
+    paths = [identities] if isinstance(identities, Path) else list(identities)
+    native = source / "gta-clothing-identities.json"
+    if native.is_file() and native.resolve() not in {path.resolve() for path in paths}:
+        paths.append(native)
+    if not paths:
+        raise ValueError("Provide --identities or export the GTA identity map into the source folder.")
+    entries = {}
+    source_layout = False
+    for path in paths:
+        document = json.loads(path.read_text(encoding="utf-8-sig"))
+        if document.get("formatVersion") != 1:
+            raise ValueError("Unsupported identity map: " + str(path))
+        source_layout |= document.get("preserveSourceLayout", False)
+        for entry in document["entries"]:
+            previous = entries.get(entry["id"])
+            if previous is None:
+                entries[entry["id"]] = entry
+                continue
+            if any(previous[key] != entry[key] for key in ("model", "kind", "slot", "collection", "index")):
+                raise ValueError("Conflicting native address for UUID: " + entry["id"])
+            textures = {texture["id"]: texture for texture in previous["textures"]}
+            by_index = {}
+            for texture in previous["textures"]:
+                if texture.get("available", True):
+                    by_index.setdefault(texture["index"], texture.get("aliasOf") or texture["id"])
+            for texture in entry["textures"]:
+                if texture["id"] in textures:
+                    if textures[texture["id"]]["index"] != texture["index"]:
+                        raise ValueError("Conflicting native texture index for UUID: " + texture["id"])
+                    continue
+                texture = dict(texture)
+                if texture["index"] in by_index:
+                    texture["aliasOf"] = by_index[texture["index"]]
+                else:
+                    by_index[texture["index"]] = texture["id"]
+                textures[texture["id"]] = texture
+            previous["textures"] = list(textures.values())
+    return {"formatVersion": 1, "preserveSourceLayout": source_layout, "entries": list(entries.values())}
+
+
 def prepare(source, destination, identities):
     if destination.exists():
         raise ValueError("Choose a new output directory; existing packages are never overwritten.")
+    document = load_identities(source, identities)
     records = {}
     export_errors = []
     for number, line in enumerate((source / "index.jsonl").open(encoding="utf-8-sig"), 1):
@@ -124,7 +166,7 @@ def prepare(source, destination, identities):
         writer.writeheader(); writer.writerows(completed)
     mapped = {(entry["asset"], entry["texture"]) for entry in completed if entry["kind"] == "drawable" and entry["texture"]}
     missing = []
-    document = json.loads(identities.read_text(encoding="utf-8-sig"))
+    (destination / "clothing-identities.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
     for entry in document["entries"]:
         if not entry.get("available", True):
             continue
@@ -163,7 +205,8 @@ def prepare(source, destination, identities):
         "Tattoo images use nation_tattoos/<gender>; appearance uses the existing barbershop category names.",
         "Unclassified images are retained in pending/ and excluded from the upload ZIP.",
         "manifest.csv provides the exact URL and SHA-256; report.json and missing-images.csv report coverage and failures.",
-        "Regenerate vrp/config/AppearanceImages.json with the high repository tool to connect the catalog to these files.", ""])
+        "clothing-identities.json combines the provided maps with gta-clothing-identities.json from the export folder.",
+        "Regenerate vrp/config/AppearanceImages.json with the high repository tool and the combined map to connect the catalog to these files.", ""])
     (destination / "INSTRUCOES.txt").write_text(instructions, encoding="utf-8-sig")
     archive_path = destination / "touz-upload.zip"
     with ZipFile(archive_path, "x", compression=ZIP_STORED) as archive:
@@ -185,6 +228,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--identities", type=Path, required=True)
+    parser.add_argument("--identities", type=Path, nargs="+", default=[])
     args = parser.parse_args()
-    prepare(args.source.resolve(), args.output.resolve(), args.identities.resolve())
+    prepare(args.source.resolve(), args.output.resolve(), [path.resolve() for path in args.identities])

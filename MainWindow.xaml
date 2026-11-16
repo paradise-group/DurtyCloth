@@ -73,6 +73,7 @@
                 <MenuItem Header="Export selected package" Click="ExportItemBundle_Click"/>
                 <MenuItem Header="Export stream" Click="Export_Click"/>
                 <MenuItem Header="Export preview photos" Click="ExportPreviewPhotos_Click"/>
+                <MenuItem Header="Export photos from installed GTA V" Click="ExportGtaPhotos_Click"/>
                 <MenuItem Header="Generate permanent IDs for all items" Click="GenerateClothingIds_Click"/>
             </MenuItem>
             <MenuItem Header="View"><MenuItem Header="Error List" Click="Validate_Click"/><MenuItem Header="Appearance assets" Click="ShowAppearanceAssets_Click"/></MenuItem>

@@ -29,12 +29,16 @@ internal sealed class PhotoExportOptionsWindow : Window
         new[] { gender is "Male" or "Masculino" ? "Masculino" : "Feminino" })
         .Where(value => _genders.GetValueOrDefault(value)?.IsChecked == true).ToArray();
 
-    public PhotoExportOptionsWindow(ClothProject project)
+    public PhotoExportOptionsWindow(ClothProject project) : this(project, null) { }
+
+    public PhotoExportOptionsWindow(ClothProject project, string? sourceDescription)
     {
         WorkflowUi.Theme(this, "Exportar fotografias", 620, 740);
         MinHeight = 650;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var outer = WorkflowUi.Stack(); Content = outer;
+        if (sourceDescription is not null)
+            outer.Children.Add(new TextBlock { Text = sourceDescription, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
         var tabs = new TabControl { Height = 420, Margin = new Thickness(0, 0, 0, 12) };
         outer.Children.Add(tabs);
         var selection = WorkflowUi.Stack();
