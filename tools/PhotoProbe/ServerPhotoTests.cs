@@ -3,6 +3,22 @@ using FooxClothStudio;
 
 internal static class ServerPhotoTests
 {
+    public static void RunLive(string game, string existing, string output)
+    {
+        var server = FiveMPhotoCatalog.ReadAsync().GetAwaiter().GetResult();
+        var gta = GtaPhotoCatalog.Scan(game, System.IO.Path.Combine(output, "cache"));
+        var result = server.Filter(gta.Project);
+        var saved = System.IO.Directory.EnumerateFiles(existing, "*", System.IO.SearchOption.AllDirectories)
+            .Where(path => new[] { ".png", ".webp", ".jpg", ".jpeg" }.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant()))
+            .Select(System.IO.Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var photos = gta.Project.Items.SelectMany(item => item.TextureIds.Select(texture => item.Id + "." + texture)).Distinct().ToArray();
+        System.IO.Directory.CreateDirectory(output);
+        var report = new { result.ServerItems, result.MatchedItems, result.Textures, result.UnmatchedItems,
+            existingPhotos = photos.Count(saved.Contains), newPhotos = photos.Count(photo => !saved.Contains(photo)) };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(output, "server-filter-report.json"), JsonSerializer.Serialize(report));
+        Console.WriteLine(JsonSerializer.Serialize(report));
+    }
+
     public static void Run()
     {
         var itemId = Guid.NewGuid();
