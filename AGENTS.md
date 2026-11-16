@@ -10,6 +10,9 @@ e [docs/MCP.md](docs/MCP.md) antes de alterar esse fluxo.
   o checklist antes de aplicar em [docs/MCP.md](docs/MCP.md#antes-de-aplicar-uma-atualização-preparada-ao-recurso-do-servidor).
 - O MCP acrescenta componentes no fim da última coleção `pcs` de cada gênero e só
   abre coleção nova nos casos descritos em [docs/MCP.md](docs/MCP.md#operações).
+- Informe ao usuário os avisos de peso (`warnings`/`packageWarnings`: resolução,
+  formato e MB das texturas) antes de aplicar. O padrão e os limites estão em
+  [docs/MCP.md](docs/MCP.md#orçamento-de-assets).
 - Informe ao usuário a quantidade de coleções criadas e as que receberam peças
   antes de aplicar, comitar ou fazer push. Quantidade inesperada deve ser
   corrigida na ferramenta.
@@ -21,6 +24,7 @@ e [docs/MCP.md](docs/MCP.md) antes de alterar esse fluxo.
 ```powershell
 dotnet run --project tools/ResourceUpdateProbe/ResourceUpdateProbe.csproj -c Release
 dotnet run --project tools/ResourceUpdateProbe/ResourceUpdateProbe.csproj -c Release -- --append-test <pasta-nova>
+dotnet run --project tools/ResourceUpdateProbe/ResourceUpdateProbe.csproj -c Release -- --budget-test <pasta-nova>
 dotnet run --project tools/CollectionIndicesProbe/CollectionIndicesProbe.csproj -c Release
 dotnet run --project tools/StableClothingIdsProbe/StableClothingIdsProbe.csproj -c Release
 dotnet run --project tools/ClothMcpProbe/ClothMcpProbe.csproj -c Release -- D:/Git/DurtyCloth/publish-mcp/ParadiseClothMcp.exe

@@ -31,7 +31,8 @@ Evite `dotnet run` na configuração stdio, pois mensagens de compilação usam 
 
 | Ferramenta | Argumentos principais | Resultado |
 | --- | --- | --- |
-| `inspect_clothing_package` | `packageRoot` | Modelos, YTD/YLD, gênero, peças e impedimentos à importação |
+| `inspect_clothing_package` | `packageRoot` | Modelos, YTD/YLD, gênero, peças, impedimentos à importação e avisos de peso |
+| `audit_clothing_assets` | `root`, `limit` opcional | Texturas e modelos fora do orçamento em qualquer pasta, com resolução, formato e MB |
 | `inspect_clothing_resource` | `resourceRoot`, `search`, `offset`, `limit` | Contagens e página de peças com collection, slot, índice e UUID |
 | `validate_clothing_resource` | `resourceRoot` | Diagnósticos estáticos de metadados e mapa de UUID |
 | `prepare_clothing_update` | `resourceRoot`, `packageRoot`, `outputParent`, `gameFolder` e `appendToLatestCollection` opcionais | Cópia atualizada, projeto e relatório das adições |
@@ -47,6 +48,32 @@ e todas as suas variantes continuam sendo uma peça separada.
 Gênero indefinido, slot desconhecido, YTD ausente, mais de 26 variantes e assets
 sem associação impedem a preparação. Os binários YDD/YTD/YLD são lidos antes de
 criar a saída. Peças sem YTD precisam de um pacote com as dependências resolvidas.
+
+### Orçamento de assets
+
+O padrão de textura é 1024×1024, ou 2048×2048 quando 1024 deixa um detalhe
+ilegível; sempre comprimida (DXT1 opaca, DXT5 com alfa) e com mipmaps.
+`inspect_clothing_package` e `audit_clothing_assets` medem cada textura pela
+memória que ela ocupa no jogo, não pelo tamanho do arquivo em disco, e informam
+resolução, formato, níveis de mipmap e MB:
+
+| Situação | Resultado |
+| --- | --- |
+| Mais de 64 MB de memória | **Impedimento** (`errors`): não cabe em uma página de recurso do RAGE e derruba o cliente com `ERR_STR_FAILURE_3` |
+| Maior que 2048 em um lado | Aviso (`warning`) |
+| 16 MB ou mais de memória | Aviso (`warning`): o FiveM trata como asset superdimensionado |
+| YDD/YLD com 16 MB ou mais em disco | Aviso (`warning`) |
+| Sem compressão (A8R8G8B8 e similares) com 1 MB ou mais | Nota (`notice`) |
+| Sem mipmaps com 512 ou mais | Nota (`notice`) |
+
+Avisos e notas não impedem a preparação: aparecem em `warnings` na inspeção,
+cada um com seu `severity`, e em `packageWarnings` no `update-report.json`. Os
+avisos são o que quebra a otimização no jogo: informe-os ao usuário e corrija as
+texturas antes de aplicar. As notas são melhorias menores. 2048 comprimida com
+mipmaps não gera nada.
+`audit_clothing_assets` percorre qualquer pasta (pacote extraído, `stream` ou o
+recurso inteiro, o que pode levar minutos) e lista primeiro os casos críticos e
+depois os mais pesados.
 
 `outputParent` deve ser uma pasta **nova**, fora dos dois diretórios de entrada.
 O exportador copia o recurso completo, confere SHA-256 e acrescenta as roupas
@@ -116,6 +143,8 @@ Não registra fotos automaticamente no servidor nem publica na CDN.
 
 ## Antes de aplicar uma atualização preparada ao recurso do servidor
 
+- Confira `packageWarnings`: nenhuma textura fora do orçamento de assets deve ser
+  aplicada sem o usuário saber; o ideal é corrigir o pacote e preparar de novo.
 - Confira `addedCollections`: vazio quando o gênero já tem coleção `pcs` com espaço;
   no máximo uma entrada por gênero do pacote nos casos listados acima.
 - Confira se as quantidades de `.ymt` de coleção e `_shop.meta` adicionados
@@ -148,7 +177,7 @@ dotnet run --project tools/ClothMcpProbe/ClothMcpProbe.csproj -c Release -- D:/G
 ```
 
 O probe usa um cliente do SDK oficial para negociar o protocolo, descobrir as
-cinco ferramentas e verificar importação, UUIDs, paginação, erros de metadados,
+seis ferramentas e verificar importação, UUIDs, paginação, erros de metadados,
 mensagens de erro e proteção das entradas/saídas com fixtures temporárias.
 Também confere seleções inválidas de fotos e limpeza de uma renderização com falha.
 

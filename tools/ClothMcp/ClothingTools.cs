@@ -17,9 +17,14 @@ public static class ClothingTools
     }
 
     [McpServerTool(Name = "inspect_clothing_package", ReadOnly = true, OpenWorld = false)]
-    [Description("Inspect an extracted local YDD/YTD/YLD clothing package without changing files. Recognizes M/F and male/female folders, keeps repeated filenames in different folders separate, and reports unknown genders, missing/orphan textures and limits. Extract archives before calling. Does not download or execute package contents.")]
+    [Description("Inspect an extracted local YDD/YTD/YLD clothing package without changing files. Recognizes M/F and male/female folders, keeps repeated filenames in different folders separate, and reports unknown genders, missing/orphan textures and limits. Also checks the asset budget: errors list textures that would crash the client (over 64 MB of memory), and warnings list each texture above 2048 or over 16 MB of memory (severity warning) and each smaller texture that is uncompressed or has no mipmaps (severity notice), with resolution, format and MB. Extract archives before calling. Does not download or execute package contents.")]
     public static string InspectPackage(string packageRoot, CancellationToken cancellationToken = default)
         => Invoke(() => ClothingOperations.InspectPackage(packageRoot, cancellationToken));
+
+    [McpServerTool(Name = "audit_clothing_assets", ReadOnly = true, OpenWorld = false)]
+    [Description("Scan every YTD/YDD/YLD under a local folder (an extracted package, a stream folder or a whole resource) against the asset budget without changing files. Reports textures that would crash the client (over 64 MB of memory, ERR_STR_FAILURE_3) as critical, textures above 2048 or over 16 MB of memory as warnings, and smaller textures that are uncompressed or have no mipmaps as notices, each with resolution, format, mip levels and MB, heaviest first. The standard is 1024, or 2048 when 1024 loses needed detail. A whole resource can take minutes.")]
+    public static string AuditAssets(string root, int limit = 100, CancellationToken cancellationToken = default)
+        => Invoke(() => ClothingOperations.AuditAssets(root, limit, cancellationToken));
 
     [McpServerTool(Name = "inspect_clothing_resource", ReadOnly = true, OpenWorld = false)]
     [Description("Inspect a local FiveM resource using the studio importer and persistent UUID map. Returns counts and a paginated clothing list; search matches labels, filenames and collections. Does not control the open GUI or connect to FXServer.")]

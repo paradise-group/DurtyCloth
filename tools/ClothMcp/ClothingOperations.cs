@@ -15,7 +15,7 @@ public static class ClothingOperations
     private static readonly HashSet<string> AssetExtensions = new(StringComparer.OrdinalIgnoreCase) { ".ydd", ".ytd", ".yld" };
 
     public sealed record PackageInspection(string Root, int Models, int Textures, int Physics,
-        List<ClothItem> Items, List<string> UnassociatedAssets, List<string> Errors);
+        List<ClothItem> Items, List<string> UnassociatedAssets, List<string> Errors, List<AssetBudgetIssue> Warnings);
     public sealed record ResourceValidation(string Root, int YmtsChecked, int ShopsChecked, int IdentitiesChecked, List<string> Errors);
 
     public static PackageInspection InspectPackage(string root, CancellationToken cancellationToken = default)
@@ -50,9 +50,42 @@ public static class ClothingOperations
             .Where(path => path is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var orphaned = files.Where(path => !associated.Contains(path)).Select(path => Path.GetRelativePath(root, path)).ToList();
         if (orphaned.Count > 0) errors.Add($"{orphaned.Count} unassociated assets; organize the package before building to avoid losing files.");
+        var budget = InspectBudget(root, files, cancellationToken);
+        errors.AddRange(budget.Where(issue => issue.Severity == AssetBudget.Critical).Select(issue => issue.Message));
+        var warnings = budget.Where(issue => issue.Severity != AssetBudget.Critical)
+            .OrderBy(issue => Array.IndexOf(SeverityOrder, issue.Severity)).ThenByDescending(issue => issue.MemoryBytes).ToList();
         return new(root, files.Count(path => Path.GetExtension(path).Equals(".ydd", StringComparison.OrdinalIgnoreCase)),
             files.Count(path => Path.GetExtension(path).Equals(".ytd", StringComparison.OrdinalIgnoreCase)),
-            files.Count(path => Path.GetExtension(path).Equals(".yld", StringComparison.OrdinalIgnoreCase)), items, orphaned, errors);
+            files.Count(path => Path.GetExtension(path).Equals(".yld", StringComparison.OrdinalIgnoreCase)), items, orphaned, errors, warnings);
+    }
+
+    public static object AuditAssets(string root, int limit, CancellationToken cancellationToken = default)
+    {
+        root = Path.GetFullPath(root);
+        var files = EnumerateFiles(root).Where(path => AssetExtensions.Contains(Path.GetExtension(path))).ToArray();
+        var issues = InspectBudget(root, files, cancellationToken);
+        return new
+        {
+            root, filesChecked = files.Length,
+            critical = issues.Count(issue => issue.Severity == AssetBudget.Critical),
+            warnings = issues.Count(issue => issue.Severity == AssetBudget.Warning),
+            notices = issues.Count(issue => issue.Severity == AssetBudget.Notice),
+            issues = issues.OrderBy(issue => Array.IndexOf(SeverityOrder, issue.Severity))
+                .ThenByDescending(issue => issue.MemoryBytes).Take(Math.Clamp(limit, 1, 500)).ToArray()
+        };
+    }
+
+    private static readonly string[] SeverityOrder = [AssetBudget.Critical, AssetBudget.Warning, AssetBudget.Notice];
+
+    private static List<AssetBudgetIssue> InspectBudget(string root, string[] files, CancellationToken cancellationToken)
+    {
+        var issues = new List<AssetBudgetIssue>();
+        foreach (var file in files)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            issues.AddRange(AssetBudget.Inspect(file, Path.GetRelativePath(root, file).Replace('\\', '/')));
+        }
+        return issues;
     }
 
     public static ClothProject OpenResource(string root, IProgress<string>? progress = null)
@@ -207,14 +240,15 @@ public static class ClothingOperations
                 addedItems = added.Length, addedTextureFiles = package.Textures, originalIdsAndAddressesPreserved = true,
                 originalFilesHashVerified = true, baselineValidationErrors = baseline.Errors, validation,
                 addedCollections = Collections(false), appendedCollections = Collections(true),
-                additions = added, deployment = "Prepared only. Faction wardrobe configuration and in-game testing are separate steps." };
+                packageWarnings = package.Warnings, additions = added, deployment = "Prepared only. Faction wardrobe configuration and in-game testing are separate steps." };
             var reportPath = Path.Combine(outputParent, "update-report.json");
             File.WriteAllText(reportPath, JsonSerializer.Serialize(report, JsonOptions));
             var projectPath = Path.Combine(outputParent, "update.fcsproj");
             File.WriteAllText(projectPath, JsonSerializer.Serialize(project, new JsonSerializerOptions { WriteIndented = true }));
             File.Delete(ownershipFile);
             return new { output, projectPath, reportPath, originalItems = original.Entries.Count, addedItems = added.Length,
-                addedTextureFiles = package.Textures, baselineValidationErrors = baseline.Errors };
+                addedTextureFiles = package.Textures, packageWarnings = package.Warnings.Count(issue => issue.Severity == AssetBudget.Warning),
+                packageNotices = package.Warnings.Count(issue => issue.Severity == AssetBudget.Notice), baselineValidationErrors = baseline.Errors };
         }
         catch
         {

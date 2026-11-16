@@ -11,7 +11,7 @@ static void Check(bool condition, string message)
     if (!condition) throw new InvalidDataException(message);
 }
 
-if (args.Length is not (1 or 3 or 5)) throw new ArgumentException("Usage: ClothMcpProbe server.dll [--verify resourceRoot | --prepare resourceRoot extractedPackage newOutputParent | --photos resourceRoot updateReport newOutputRoot]");
+if (args.Length is not (1 or 3 or 5)) throw new ArgumentException("Usage: ClothMcpProbe server.dll [--verify resourceRoot | --audit folder | --inspect extractedPackage | --prepare resourceRoot extractedPackage newOutputParent | --photos resourceRoot updateReport newOutputRoot]");
 var hostPath = Path.GetFullPath(args[0]);
 var nativeHost = Path.GetExtension(hostPath).Equals(".exe", StringComparison.OrdinalIgnoreCase);
 await using var client = await McpClient.CreateAsync(new StdioClientTransport(new()
@@ -30,8 +30,27 @@ static JsonElement Data(CallToolResult result)
 }
 
 var tools = await client.ListToolsAsync();
-Check(tools.Select(tool => tool.Name).ToHashSet().SetEquals(new[] { "inspect_clothing_package", "inspect_clothing_resource", "validate_clothing_resource", "prepare_clothing_update", "export_clothing_photos" }), "Unexpected MCP tools");
+Check(tools.Select(tool => tool.Name).ToHashSet().SetEquals(new[] { "inspect_clothing_package", "inspect_clothing_resource", "validate_clothing_resource", "prepare_clothing_update", "export_clothing_photos", "audit_clothing_assets" }), "Unexpected MCP tools");
 Console.WriteLine("PASS: MCP initialize, tool discovery and schemas.");
+
+if (args.Length == 3 && args[1] == "--audit")
+{
+    var audit = Data(await Call("audit_clothing_assets", new() { ["root"] = args[2], ["limit"] = 25 }));
+    Console.WriteLine($"Audit: {audit.GetProperty("filesChecked")} files, {audit.GetProperty("critical")} critical, {audit.GetProperty("warnings")} warnings, {audit.GetProperty("notices")} notices.");
+    foreach (var issue in audit.GetProperty("issues").EnumerateArray())
+        Console.WriteLine($"[{issue.GetProperty("severity").GetString()}] {issue.GetProperty("message").GetString()}");
+    return;
+}
+
+if (args.Length == 3 && args[1] == "--inspect")
+{
+    var inspected = Data(await Call("inspect_clothing_package", new() { ["packageRoot"] = args[2] }));
+    var severities = inspected.GetProperty("warnings").EnumerateArray().Select(issue => issue.GetProperty("severity").GetString()).ToArray();
+    Console.WriteLine($"Package: {inspected.GetProperty("models")} models, {inspected.GetProperty("textures")} YTDs; {inspected.GetProperty("errors").GetArrayLength()} blockers, {severities.Count(severity => severity == "warning")} warnings, {severities.Count(severity => severity == "notice")} notices.");
+    foreach (var error in inspected.GetProperty("errors").EnumerateArray().Take(10)) Console.WriteLine("[blocker] " + error.GetString());
+    foreach (var warning in inspected.GetProperty("warnings").EnumerateArray().Take(10)) Console.WriteLine($"[{warning.GetProperty("severity").GetString()}] {warning.GetProperty("message").GetString()}");
+    return;
+}
 
 if (args.Length == 3)
 {
@@ -58,7 +77,7 @@ if (args.Length == 5)
     }
     Check(args[1] == "--prepare", "Unknown action");
     var package = Data(await Call("inspect_clothing_package", new() { ["packageRoot"] = args[3] }));
-    Console.WriteLine($"Package: {package.GetProperty("models")} models, {package.GetProperty("textures")} YTDs; {package.GetProperty("errors").GetArrayLength()} blockers.");
+    Console.WriteLine($"Package: {package.GetProperty("models")} models, {package.GetProperty("textures")} YTDs; {package.GetProperty("errors").GetArrayLength()} blockers, {package.GetProperty("warnings").GetArrayLength()} warnings.");
     File.WriteAllText(Path.Combine(Path.GetDirectoryName(args[3])!, "mcp-package-inspection.json"), package.GetRawText());
     var output = Data(await Call("prepare_clothing_update", new() { ["resourceRoot"] = args[2], ["packageRoot"] = args[3], ["outputParent"] = args[4] }));
     Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
