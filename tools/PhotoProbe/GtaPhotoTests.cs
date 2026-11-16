@@ -55,7 +55,8 @@ internal static class GtaPhotoTests
                 var pixels = new byte[image.PixelWidth * image.PixelHeight * 4]; image.CopyPixels(pixels, image.PixelWidth * 4, 0);
                 if (!Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4 + 3] == 0)
                     || !Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4 + 3] > 0)
-                    || Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4] != 255))
+                    || Enumerable.Range(0, pixels.Length / 4).Any(index => pixels[index * 4] != 0
+                        || pixels[index * 4 + 1] != 0 || pixels[index * 4 + 2] != 0))
                     throw new Exception("The native A8 overlay was decoded as an opaque grayscale picture.");
             }
             using (var raw = File.Create(Path.Combine(output, appearance.OverlayCategory + "-texture.png")))

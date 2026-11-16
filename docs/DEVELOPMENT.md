@@ -63,6 +63,12 @@ As dimensões dos presets de tatuagem são tratadas como semi-extensões. A vist
 usa as normais da pele; peito e costas mantêm vistas frontal e traseira. As
 decorações de cabelo usam diretamente os UVs da cabeça, sem o retângulo das
 tatuagens, para mostrar a micropigmentação no couro cabeludo.
+As tatuagens do corpo modulam a cor da pele, em vez de pintar a imagem opaca por
+cima. O branco deixa a pele visível; preto e pigmentos mantêm o desenho e a sua
+opacidade. A amostragem relaciona os UVs de decorações com os UVs da pele.
+Texturas A8 são lidas como (0, 0, 0, alfa), conforme a conversão do DirectXTex,
+para manter as máscaras sem canais RGB como tinta preta, preservando o alfa:
+https://github.com/microsoft/DirectXTex/blob/main/DirectXTex/DirectXTexConvert.cpp
 
 Materiais `ped_emissive` e `ped_palette` não usam o alfa difuso como transparência:
 referências dos mantenedores do Sollumz em

@@ -61,6 +61,13 @@ internal static class SurfacePhotoTests
         var white = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 255, 255, 255, 255 }, 4);
         var red = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4);
         var ped = new PhotoPed([part], new Dictionary<string, BitmapSource> { [part.TextureName!] = white }, []);
+        var skin = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 80, 100, 150, 255 }, 4);
+        var bodyInk = BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32, null,
+            new byte[] { 255, 255, 255, 200, 0, 0, 0, 100, 0, 0, 255, 255, 255, 0, 0, 255 }, 8);
+        var composed = PedSurfacePhotos.ModulateSkin(bodyInk, skin, coordinates, coordinates, part.Indices);
+        var composedPixels = new byte[16]; composed.CopyPixels(composedPixels, 8, 0);
+        if (!composedPixels.SequenceEqual(new byte[] { 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 150, 255, 80, 0, 0, 255 }))
+            throw new Exception("Body tattoo composition painted its white background or lost black ink, pigment colours or opacity.");
         var artworkPixels = new byte[] { 255, 255, 255, 200, 0, 0, 0, 180, 0, 0, 255, 255, 255, 0, 0, 90 };
         var artwork = BitmapSource.Create(4, 1, 96, 96, PixelFormats.Bgra32, null, artworkPixels, 16);
         var makeup = PedSurfacePhotos.AppearanceOverlay("makeup", artwork, ped);

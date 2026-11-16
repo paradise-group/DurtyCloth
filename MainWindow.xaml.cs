@@ -1712,7 +1712,7 @@ public partial class MainWindow : Window
             for (var offset = 0; offset < pixels.Length; offset += 4)
             {
                 pixels[offset + 3] = pixels[offset];
-                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = 255;
+                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = 0;
             }
         var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32,
             null, pixels, width * 4);

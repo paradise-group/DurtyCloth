@@ -71,7 +71,7 @@ public static class PedSurfacePhotos
         }
         var atlas = new RenderTargetBitmap(AtlasSize, AtlasSize, 96, 96, PixelFormats.Pbgra32);
         atlas.Render(visual);
-        return Render(ped, bodySlot, atlas, background, zone, chooseView: true);
+        return Render(ped, bodySlot, atlas, background, zone, chooseView: true, modulateWithSkin: bodySlot != "head");
     }
 
     public static BitmapSource Overlay(BitmapSource source, Color? tint, BitmapSource? palette = null)
@@ -108,7 +108,8 @@ public static class PedSurfacePhotos
         return result;
     }
 
-    private static BitmapSource Render(PhotoPed ped, string bodySlot, BitmapSource overlay, Color background, int? decorationZone, bool chooseView)
+    private static BitmapSource Render(PhotoPed ped, string bodySlot, BitmapSource overlay, Color background, int? decorationZone, bool chooseView,
+        bool modulateWithSkin = false)
     {
         var parts = ped.Parts.Where(part => part.TextureName?.StartsWith("__ped_" + bodySlot + "_", StringComparison.Ordinal) == true).ToArray();
         if (parts.Length == 0) throw new InvalidDataException("O ped não tem a superfície necessária: " + bodySlot);
@@ -124,7 +125,9 @@ public static class PedSurfacePhotos
             if (uv.X < 0 || uv.X > 1 || uv.Y < 0 || uv.Y > 1) return false;
             var x = Math.Min((int)(uv.X * alpha.PixelWidth), alpha.PixelWidth - 1);
             var y = Math.Min((int)(uv.Y * alpha.PixelHeight), alpha.PixelHeight - 1);
-            return pixels[(y * alpha.PixelWidth + x) * 4 + 3] > byte.MaxValue * AlphaThreshold;
+            var offset = (y * alpha.PixelWidth + x) * 4;
+            return pixels[offset + 3] > byte.MaxValue * AlphaThreshold && (!modulateWithSkin
+                || pixels[offset] < 250 || pixels[offset + 1] < 250 || pixels[offset + 2] < 250);
         }
         foreach (var part in parts)
         {
@@ -159,7 +162,8 @@ public static class PedSurfacePhotos
             var name = "__surface_overlay_" + surfaces.Count;
             surfaces.Add(part with { Positions = positions, Indices = surfaceIndices, TextureName = name, TextureCoordinates = coordinates,
                 UsesTextureAlpha = true, IsEmissive = false, IsDecoration = false });
-            textures[name] = overlay;
+            textures[name] = modulateWithSkin
+                ? ModulateSkin(overlay, skin, part.TextureCoordinates, coordinates, surfaceIndices) : overlay;
             for (var triangle = 0; triangle + 2 < surfaceIndices.Length; triangle += 3)
             {
                 var first = surfaceIndices[triangle];
@@ -204,5 +208,50 @@ public static class PedSurfacePhotos
         }
         return PreviewPhotoRenderer.Render(new ModelPreviewData(rotated, triangles, triangles), textures, null,
             "Applied surface", background, framingOverride: framing);
+    }
+
+    public static BitmapSource ModulateSkin(BitmapSource overlay, BitmapSource skin, Point[] skinCoordinates,
+        Point[] decorationCoordinates, int[] indices)
+    {
+        var source = new FormatConvertedBitmap(overlay, PixelFormats.Bgra32, null, 0);
+        var baseImage = new FormatConvertedBitmap(skin, PixelFormats.Bgra32, null, 0);
+        var ink = new byte[source.PixelWidth * source.PixelHeight * 4];
+        var skinPixels = new byte[baseImage.PixelWidth * baseImage.PixelHeight * 4];
+        source.CopyPixels(ink, source.PixelWidth * 4, 0);
+        baseImage.CopyPixels(skinPixels, baseImage.PixelWidth * 4, 0);
+        var result = new byte[ink.Length];
+        for (var triangle = 0; triangle + 2 < indices.Length; triangle += 3)
+        {
+            var first = indices[triangle]; var second = indices[triangle + 1]; var third = indices[triangle + 2];
+            var firstUv = decorationCoordinates[first]; var secondUv = decorationCoordinates[second]; var thirdUv = decorationCoordinates[third];
+            var denominator = (secondUv.Y - thirdUv.Y) * (firstUv.X - thirdUv.X)
+                + (thirdUv.X - secondUv.X) * (firstUv.Y - thirdUv.Y);
+            if (Math.Abs(denominator) < 1e-12) continue;
+            var left = Math.Clamp((int)Math.Floor(Math.Min(firstUv.X, Math.Min(secondUv.X, thirdUv.X)) * source.PixelWidth), 0, source.PixelWidth - 1);
+            var right = Math.Clamp((int)Math.Ceiling(Math.Max(firstUv.X, Math.Max(secondUv.X, thirdUv.X)) * source.PixelWidth), 0, source.PixelWidth - 1);
+            var top = Math.Clamp((int)Math.Floor(Math.Min(firstUv.Y, Math.Min(secondUv.Y, thirdUv.Y)) * source.PixelHeight), 0, source.PixelHeight - 1);
+            var bottom = Math.Clamp((int)Math.Ceiling(Math.Max(firstUv.Y, Math.Max(secondUv.Y, thirdUv.Y)) * source.PixelHeight), 0, source.PixelHeight - 1);
+            for (var y = top; y <= bottom; y++)
+                for (var x = left; x <= right; x++)
+                {
+                    var offset = (y * source.PixelWidth + x) * 4;
+                    if (ink[offset + 3] == 0 || ink[offset] == 255 && ink[offset + 1] == 255 && ink[offset + 2] == 255) continue;
+                    var u = (x + 0.5) / source.PixelWidth; var v = (y + 0.5) / source.PixelHeight;
+                    var firstWeight = ((secondUv.Y - thirdUv.Y) * (u - thirdUv.X) + (thirdUv.X - secondUv.X) * (v - thirdUv.Y)) / denominator;
+                    var secondWeight = ((thirdUv.Y - firstUv.Y) * (u - thirdUv.X) + (firstUv.X - thirdUv.X) * (v - thirdUv.Y)) / denominator;
+                    var thirdWeight = 1 - firstWeight - secondWeight;
+                    if (firstWeight < -1e-7 || secondWeight < -1e-7 || thirdWeight < -1e-7) continue;
+                    var skinU = skinCoordinates[first].X * firstWeight + skinCoordinates[second].X * secondWeight + skinCoordinates[third].X * thirdWeight;
+                    var skinV = skinCoordinates[first].Y * firstWeight + skinCoordinates[second].Y * secondWeight + skinCoordinates[third].Y * thirdWeight;
+                    var skinX = Math.Min((int)((skinU - Math.Floor(skinU)) * baseImage.PixelWidth), baseImage.PixelWidth - 1);
+                    var skinY = Math.Min((int)((skinV - Math.Floor(skinV)) * baseImage.PixelHeight), baseImage.PixelHeight - 1);
+                    var skinOffset = (skinY * baseImage.PixelWidth + skinX) * 4;
+                    for (var channel = 0; channel < 3; channel++) result[offset + channel] = (byte)((skinPixels[skinOffset + channel] * ink[offset + channel] + 127) / 255);
+                    result[offset + 3] = ink[offset + 3];
+                }
+        }
+        var bitmap = BitmapSource.Create(source.PixelWidth, source.PixelHeight, 96, 96, PixelFormats.Bgra32, null, result, source.PixelWidth * 4);
+        bitmap.Freeze();
+        return bitmap;
     }
 }
