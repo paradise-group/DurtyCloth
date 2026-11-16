@@ -74,9 +74,16 @@ def prepare(source, destination, identities):
             continue
         entry = json.loads(line)
         if entry.get("status") == "error":
-            export_errors.append({key: entry[key] for key in ("kind", "Name", "item", "Gender", "gender", "Category", "variant", "message") if key in entry})
+            export_errors.append({key: entry[key] for key in ("kind", "Name", "item", "Gender", "gender", "Category", "variant", "texture", "message") if key in entry})
         if entry.get("status") == "ok" and entry.get("file"):
             records[entry["file"].replace("\\", "/").casefold()] = entry
+
+    def export_key(entry):
+        return (entry["kind"], entry.get("item", entry.get("Name")), entry.get("Gender", entry.get("gender")),
+            entry.get("variant", entry.get("texture", "")))
+
+    recovered = {export_key(entry) for entry in records.values()}
+    export_errors = [entry for entry in export_errors if export_key(entry) not in recovered]
     files = sorted(path for folder in ("Masculino", "Feminino", "tattoos", "aparencia")
         for path in (source / folder).rglob("*") if path.is_file() and path.suffix.lower() in (".webp", ".png", ".jpg", ".jpeg"))
     if not files:
