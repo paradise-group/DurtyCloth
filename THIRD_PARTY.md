@@ -1,5 +1,9 @@
 # Componentes externos
 
+- `BCnEncoder.Net` 2.3.0: descodificação de texturas BC7 para prévias e fotos.
+  Projeto: https://github.com/Nominom/BCnEncoder.NET
+  Licença MIT: `licenses/BCnEncoder.Net-LICENSE-MIT.txt`.
+
 - `CodeWalker.Core.dll`: usado para ler e compilar metadados binários YMT.
   Cópia local proveniente do Mapper instalado neste computador.
   Projeto: https://github.com/dexyfex/CodeWalker

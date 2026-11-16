@@ -1692,7 +1692,9 @@ public partial class MainWindow : Window
             mip++;
         var width = Math.Max(1, texture.Width >> mip);
         var height = Math.Max(1, texture.Height >> mip);
-        var pixels = DDSIO.GetPixels(texture, mip);
+        var pixels = texture.Format == TextureFormat.D3DFMT_BC7
+            ? TexturePreviewDecoder.DecodeBc7(texture, mip)
+            : DDSIO.GetPixels(texture, mip);
         if (pixels is null || pixels.Length < width * height * 4)
             throw new InvalidDataException("Formato de textura ainda não suportado para prévia.");
         var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32,

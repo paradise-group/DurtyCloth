@@ -13,6 +13,18 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 6 && args[0] == "--verify-photo-failures")
+        {
+            try { PhotoFailureProbe.Verify(args[1], args[2], args[3], args[4], args[5]); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 2 && args[0] == "--inspect-photo-failures")
+        {
+            try { PhotoFailureProbe.Run(args[1]); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 3 && args[0] == "--export-server-photos")
         {
             try { ServerPhotoBatch.Run(args[1], args[2]); }

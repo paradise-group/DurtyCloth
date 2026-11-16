@@ -22,6 +22,14 @@ public static class TattooExporter
     }
     public static Texture ReadImage(TattooItem item, string path)
     {
+        var texture = ReadImageForPreview(item, path);
+        if (texture.Width != texture.Height || texture.Width > 4096 || (texture.Width & (texture.Width - 1)) != 0)
+            throw new InvalidDataException("Tattoo image must be square, power of two and at most 4096 px.");
+        return texture;
+    }
+
+    public static Texture ReadImageForPreview(TattooItem item, string path)
+    {
         Texture texture;
         switch (Path.GetExtension(path).ToLowerInvariant())
         {
@@ -35,8 +43,8 @@ public static class TattooExporter
                 break;
             default: throw new InvalidDataException("Select a PNG, DDS or YTD tattoo image.");
         }
-        if (texture.Width == 0 || texture.Width != texture.Height || texture.Width > 4096 || (texture.Width & (texture.Width - 1)) != 0 || texture.Data?.FullData is not { Length: > 0 })
-            throw new InvalidDataException("Tattoo image must be square, power of two and at most 4096 px.");
+        if (texture.Width == 0 || texture.Height == 0 || texture.Data?.FullData is not { Length: > 0 })
+            throw new InvalidDataException("Tattoo image has no pixel data.");
         return texture;
     }
     public static string[] Write(ClothProject project, Func<string, string> resolve, string output, string resource)

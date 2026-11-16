@@ -177,7 +177,8 @@ public partial class MainWindow
                     {
                         failed++;
                         await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "drawable", status = "error", item = item.Name,
-                            item.Gender, item.Category, variant, message = ex.Message }));
+                            itemId = item.Id, textureId, item.Gender, item.Category, item.SourceIndex, variant,
+                            model = item.ModelPath, texture = variant < 0 ? null : item.TexturePaths[variant], message = ex.Message }));
                     }
                     progress.Report(++completed, item.DisplayName);
                     await Task.Yield();
@@ -205,7 +206,7 @@ public partial class MainWindow
                                     unplacedPed = await Task.Run(() => PreviewPhotoRenderer.LoadPed(configuredGameFolder, tattooGender));
                                     pedCache[tattooGender] = unplacedPed;
                                 }
-                                var texture = await Task.Run(() => TattooExporter.ReadImage(tattoo, resolveAsset(tattoo.ImagePath)));
+                                var texture = await Task.Run(() => TattooExporter.ReadImageForPreview(tattoo, resolveAsset(tattoo.ImagePath)));
                                 var image = DecodeTextureBitmap(texture, 1024);
                                 Directory.CreateDirectory(folder);
                                 path = session.SaveImage(path, temporary => PreviewPhotoRenderer.SaveUnplacedTattoo(temporary, image, unplacedPed, photoBackground, imageOptions), legacyPath);
@@ -220,7 +221,7 @@ public partial class MainWindow
                         catch (Exception ex)
                         {
                             failed++;
-                            await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "error", tattoo.Name,
+                            await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "error", tattoo.Name, tattoo.Id, tattoo.ImagePath, tattoo.SourceTextureName,
                                 gender = tattooGender, message = ex.Message }));
                         }
                         progress.Report(++completed, tattoo.Name + " / zona por definir");
@@ -242,7 +243,7 @@ public partial class MainWindow
                                 tattooPed = await Task.Run(() => PreviewPhotoRenderer.LoadPed(configuredGameFolder, tattooGender));
                                 pedCache[tattooGender] = tattooPed;
                             }
-                            var texture = await Task.Run(() => TattooExporter.ReadImage(tattoo, resolveAsset(tattoo.ImagePath)));
+                            var texture = await Task.Run(() => TattooExporter.ReadImageForPreview(tattoo, resolveAsset(tattoo.ImagePath)));
                             var image = DecodeTextureBitmap(texture, 1024);
                             Directory.CreateDirectory(folder);
                             path = session.SaveImage(path, temporary => PreviewPhotoRenderer.SaveTattoo(temporary, tattoo, image, tattooPed, photoBackground, imageOptions), legacyPath);
@@ -256,7 +257,7 @@ public partial class MainWindow
                     catch (Exception ex)
                     {
                         failed++;
-                        await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "error", tattoo.Name,
+                        await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "tattoo", status = "error", tattoo.Name, tattoo.Id, tattoo.ImagePath, tattoo.SourceTextureName,
                             gender = tattooGender, message = ex.Message }));
                     }
                     progress.Report(++completed, tattoo.Name + " / " + tattooGender);
@@ -317,7 +318,7 @@ public partial class MainWindow
                             catch (Exception ex)
                             {
                                 failed++;
-                                await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "appearance", status = "error", appearance.Name,
+                                await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "appearance", status = "error", appearance.Name, appearance.Id, appearance.TexturePath, textureIndex,
                                     appearanceKind = appearance.Kind, gender = appearanceGender, texture = texture.Name, message = ex.Message }));
                             }
                         }
@@ -325,7 +326,7 @@ public partial class MainWindow
                     catch (Exception ex)
                     {
                         failed++;
-                        await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "appearance", status = "error", appearance.Name,
+                        await index.WriteLineAsync(JsonSerializer.Serialize(new { kind = "appearance", status = "error", appearance.Name, appearance.Id, appearance.TexturePath,
                             appearanceKind = appearance.Kind, gender = appearanceGender, message = ex.Message }));
                     }
                     progress.Report(++completed, appearance.Name + " / " + appearanceGender);

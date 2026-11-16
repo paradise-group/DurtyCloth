@@ -23,6 +23,15 @@ registrado em COMPATIBILITY.md. Como a pasta original não tinha Git, o primeiro
 - Build Release e publish win-x64 autocontido concluídos sem erros.
 
 Os probes que dependem de fixtures não são testes autossuficientes de CI.
+
+Para verificar as falhas do lote de fotos de 16/11, `PhotoProbe` aceita
+`--verify-photo-failures <projeto.fcsproj> <resource> <index.jsonl> <pasta-nova> <GTA>`.
+O projeto fornece os metadados e os assets são procurados pelo nome no resource.
+A saída deve ser uma pasta nova, separada da exportação original. O teste renderiza
+as 85 entradas recuperáveis, preserva a validação estrita de tatuagens no build,
+verifica os mips BC7 de 1024 e 512 px e a geometria completa do LOD disponível.
+As quatro entradas com fontes inválidas ficam identificadas em `report.json`.
+
 Exigem os projetos e assets locais referidos nos argumentos ou caminhos do programa.
 Assets GTA, caches do jogo, exportações e projetos pessoais não estão no Git.
 Para executar com seus dados, ajuste os caminhos de fixtures ou passe os argumentos

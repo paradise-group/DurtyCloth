@@ -24,7 +24,9 @@ public static class ModelPreview
         var geometryEntries = new List<(DrawableGeometry Geometry, ShaderFX? Shader,
             ushort[] Indices, int VertexCount, int TriangleCount)>();
         foreach (var drawable in ydd.Drawables ?? [])
-            foreach (var model in drawable?.DrawableModels?.High ?? [])
+            foreach (var model in new[] { drawable?.DrawableModels?.High, drawable?.DrawableModels?.Med,
+                         drawable?.DrawableModels?.Low, drawable?.DrawableModels?.VLow }
+                         .FirstOrDefault(models => models is { Length: > 0 }) ?? [])
                 foreach (var geometry in model?.Geometries ?? [])
                 {
                     if (geometry?.VertexData?.Info is null || geometry.IndexBuffer?.Indices is null ||
