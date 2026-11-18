@@ -80,9 +80,7 @@ public static class ClothingIdentityMap
             for (var index = 0; index < item.TexturePaths.Count; index++)
             {
                 var available = !item.IsDummy && !string.IsNullOrWhiteSpace(item.TexturePaths[index]);
-                var original = Path.GetFileNameWithoutExtension(item.OriginalTextureFileNames.ElementAtOrDefault(index) ?? item.TexturePaths[index]);
-                var match = Regex.Match(original, "_([a-z]{3})$", RegexOptions.IgnoreCase);
-                var tail = prop ? "" : "_" + (match.Success ? match.Groups[1].Value.ToLowerInvariant() : suffix == "r" ? "whi" : "uni");
+                var tail = prop ? "" : suffix == "r" ? "_whi" : "_uni";
                 textures.Add(new(item.TextureIds[index], index,
                     available ? prefix + "^" + code + "_diff_" + number + "_" + (char)('a' + index) + tail + ".ytd" : null, available));
             }

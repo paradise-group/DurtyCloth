@@ -106,11 +106,8 @@ public static class AddonExporter
                         for (var texture = 0; texture < item.TexturePaths.Count; texture++)
                         {
                             if (string.IsNullOrWhiteSpace(item.TexturePaths[texture])) continue;
-                            var originalTexture = Path.GetFileNameWithoutExtension(
-                                item.OriginalTextureFileNames.ElementAtOrDefault(texture) ?? item.TexturePaths[texture]);
-                            var suffixMatch = Regex.Match(originalTexture, "_([a-z]{3})$", RegexOptions.IgnoreCase);
-                            var textureSuffix = suffixMatch.Success ? suffixMatch.Groups[1].Value.ToLowerInvariant() :
-                                suffix == "r" ? "whi" : "uni";
+                            // Match propMask/texId, even when the incoming YTD was misnamed.
+                            var textureSuffix = suffix == "r" ? "whi" : "uni";
                             var textureName = fullCollection + "^" + SlotCodes[group.Key] + "_diff_" +
                                 number + "_" + (char)('a' + texture) + "_" + textureSuffix + ".ytd";
                             CopyAsset(resolvePath(item.TexturePaths[texture]), Path.Combine(itemFolder, textureName));

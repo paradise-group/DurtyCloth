@@ -49,6 +49,10 @@ considerando também os lotes anteriores dessa atualização.
 Os modelos novos que já foram planejados na mesma remessa também entram nessa
 busca; a capacidade deles é reservada antes de considerar o próximo lote.
 A comparação distingue o comportamento nativo dos sufixos `_u` e `_r`.
+Na exportação, o nome externo das texturas acompanha o modo do modelo e os
+metadados nativos: `_u` usa `_uni.ytd` e `_r` usa `_whi.ytd`. Um sufixo
+inconsistente no YTD de entrada é normalizado, tanto em drawables novos quanto
+nas texturas acrescentadas a um modelo idêntico. O conteúdo do YTD é preservado.
 São 26 posições, A–Z (índices 0–25), conforme a
 [documentação do Durty](https://docs.gta.clothing/game-mechanics/drawable-types-and-textures).
 Exemplo: 24 posições ocupadas e 10 texturas chegando geram um novo drawable com

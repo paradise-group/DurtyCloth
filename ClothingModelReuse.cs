@@ -1,7 +1,6 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using CodeWalker.GameFiles;
@@ -142,11 +141,8 @@ public static class ResourceTextureReuse
                 for (var i = 0; i < reuse.Incoming.TexturePaths.Count; i++)
                 {
                     var index = start + i;
-                    var suffix = (reuse.Incoming.OriginalModelFileName ?? reuse.Incoming.ModelPath).EndsWith("_r.ydd", StringComparison.OrdinalIgnoreCase) ? "whi" : "uni";
-                    var originalTexture = Path.GetFileNameWithoutExtension(reuse.Incoming.OriginalTextureFileNames.ElementAtOrDefault(i)
-                        ?? reuse.Incoming.TexturePaths[i]);
-                    var suffixMatch = Regex.Match(originalTexture, "_([a-z]{3})$", RegexOptions.IgnoreCase);
-                    if (suffixMatch.Success) suffix = suffixMatch.Groups[1].Value.ToLowerInvariant();
+                    // The published target's skin mode determines the native dictionary name.
+                    var suffix = entry.ModelFile?.EndsWith("_r.ydd", StringComparison.OrdinalIgnoreCase) == true ? "whi" : "uni";
                     var name = fullName + "^" + code + "_diff_" + entry.Index.ToString("D3") + "_" + (char)('a' + index) + "_" + suffix + ".ytd";
                     var path = Path.Combine(Path.GetDirectoryName(ymtPath)!, name);
                     if (Directory.EnumerateFiles(output, name, SearchOption.AllDirectories).Any()) throw new IOException("Texture filename already occupied: " + name);

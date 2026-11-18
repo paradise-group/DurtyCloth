@@ -63,7 +63,25 @@ internal static class ReuseTests
         var skin = Item("skin", 1);
         skin.OriginalTextureFileNames[0] = "jbib_diff_001_a_whi.ytd";
         var skinMap = Map(Update(source, "skin", skin));
-        Check(skinMap.Entries.Single().Textures.Last().File!.EndsWith("_y_whi.ytd"), "Preserve the incoming skin texture suffix.");
+        Check(skinMap.Entries.Single().Textures.Last().File!.EndsWith("_y_uni.ytd"), "A universal target must normalize a misnamed incoming YTD to uni.");
+        var raced = Item("raced", 1, 81);
+        var racedPath = Path.Combine(Path.GetDirectoryName(raced.ModelPath)!, "jbib_001_r.ydd");
+        File.Move(raced.ModelPath, racedPath);
+        raced.ModelPath = racedPath; raced.OriginalModelFileName = Path.GetFileName(racedPath);
+        var racedSource = Baseline("raced_source", raced);
+        var racedEntry = Map(racedSource).Entries.Single();
+        Check(racedEntry.Textures.Single().File!.EndsWith("_a_whi.ytd"), "A raced new drawable must normalize incoming uni to whi.");
+        var racedIncoming = Item("raced-incoming", 2, 81);
+        var racedIncomingPath = Path.Combine(Path.GetDirectoryName(racedIncoming.ModelPath)!, "jbib_001_r.ydd");
+        File.Move(racedIncoming.ModelPath, racedIncomingPath);
+        racedIncoming.ModelPath = racedIncomingPath; racedIncoming.OriginalModelFileName = Path.GetFileName(racedIncomingPath);
+        var racedOutput = Update(racedSource, "raced-reuse", racedIncoming);
+        var racedUpdated = Map(racedOutput).Entries.Single();
+        Check(racedUpdated.Id == racedEntry.Id && racedUpdated.Textures.Skip(1).All(texture => texture.File!.EndsWith("_whi.ytd")),
+            "Reused raced models must append only whi dictionaries, retaining the published identity.");
+        var racedYmt = CollectionInsertion.ReadYmt(Directory.EnumerateFiles(racedOutput, "*.ymt", SearchOption.AllDirectories).Single());
+        Check(CollectionInsertion.Drawables(racedYmt, 11).Elements("Item").Single().Element("aTexData")!.Elements("Item")
+            .All(texture => texture.Element("texId")!.Attribute("value")!.Value == "1"), "Raced naming and native skin metadata must agree.");
         foreach (var file in Directory.EnumerateFiles(source, "*.ydd", SearchOption.AllDirectories))
             Check(AssetContent.Equivalent(file, Path.Combine(exactOutput, Path.GetRelativePath(source, file))), "Published 3D changed.");
         var ymt = CollectionInsertion.ReadYmt(Directory.EnumerateFiles(exactOutput, "*.ymt", SearchOption.AllDirectories).Single());
