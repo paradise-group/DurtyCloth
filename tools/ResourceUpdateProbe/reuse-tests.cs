@@ -84,6 +84,21 @@ internal static class ReuseTests
         var concurrent = Map(Update(source, "two-batches", Item("batch-a", 2), Item("batch-b", 2)));
         Check(concurrent.Entries.Count == 2 && concurrent.Entries.Single(entry => entry.Id == original.Id).Textures.Count == 26,
             "Capacity reservations must include earlier batches in the same update.");
+        var pendingFirst = Item("pending-first", 2, 90);
+        var pendingSecond = Item("pending-second", 3, 90);
+        var pendingResult = Map(Update(source, "pending-reuse", pendingFirst, pendingSecond));
+        Check(pendingResult.Entries.Count == 2 && pendingResult.Entries.Single(entry => entry.Id == pendingFirst.Id).Textures.Count == 5,
+            "Identical new models in the same update must share one drawable when both whole batches fit.");
+        var three = Map(Update(source, "three-batches", Item("three-a", 2), Item("three-b", 2), Item("three-c", 2)));
+        Check(three.Entries.Count == 2 && three.Entries.Single(entry => entry.Id != original.Id).Textures.Count == 4,
+            "After a published drawable fills, subsequent batches must reuse the new drawable.");
+        var overflowFirst = Item("pending-24", 24, 91);
+        var pendingOverflow = Map(Update(source, "pending-overflow", overflowFirst, Item("pending-10", 10, 91)));
+        Check(pendingOverflow.Entries.Count == 3 && pendingOverflow.Entries.Single(entry => entry.Id == overflowFirst.Id).Textures.Count == 24,
+            "Pending drawables must also keep a ten-texture batch together when only two positions remain.");
+        var rigid = Item("rigid", 1, 90); rigid.OriginalModelFileName = "jbib_001_r.ydd";
+        Check(Map(Update(source, "rigid-pending", Item("flexible", 1, 90), rigid)).Entries.Count == 3,
+            "Identical bytes with different native rigid masks cannot share a drawable.");
         var pcsItem = Item("pcs", 1, 77);
         var pcsSource = Update(source, "pcs-source", pcsItem);
         var hybridNew = Item("hybrid-new", 1, 78);

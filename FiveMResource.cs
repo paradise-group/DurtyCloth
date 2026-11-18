@@ -30,7 +30,7 @@ public sealed record FiveMResource(string Root, int FileCount, long TotalBytes)
         Directory.CreateDirectory(destination);
         try
         {
-            foreach (var source in files)
+            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4 }, source =>
             {
                 var relative = Path.GetRelativePath(Root, source);
                 var target = Path.Combine(destination, relative);
@@ -40,7 +40,7 @@ public sealed record FiveMResource(string Root, int FileCount, long TotalBytes)
                 using var targetStream = File.OpenRead(target);
                 if (!SHA256.HashData(sourceStream).SequenceEqual(SHA256.HashData(targetStream)))
                     throw new IOException("Falha de verificação: " + relative);
-            }
+            });
             return files.Length;
         }
         catch

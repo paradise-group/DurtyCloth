@@ -45,8 +45,11 @@ repetíveis pelo caminho relativo no pacote. Mantenha essa organização entre
 inspeção e construção. Antes de criar outro drawable, a atualização compara o
 YDD principal, modelos alternativos e física por SHA-256, no mesmo gênero e slot.
 Um modelo idêntico só é reaproveitado se comportar **todas** as variantes do lote,
-considerando também os lotes anteriores dessa atualização. São 26 posições,
-A–Z (índices 0–25), conforme a
+considerando também os lotes anteriores dessa atualização.
+Os modelos novos que já foram planejados na mesma remessa também entram nessa
+busca; a capacidade deles é reservada antes de considerar o próximo lote.
+A comparação distingue o comportamento nativo dos sufixos `_u` e `_r`.
+São 26 posições, A–Z (índices 0–25), conforme a
 [documentação do Durty](https://docs.gta.clothing/game-mechanics/drawable-types-and-textures).
 Exemplo: 24 posições ocupadas e 10 texturas chegando geram um novo drawable com
 as 10 juntas; o lote nunca é dividido para preencher duas vagas. A busca pode
@@ -91,6 +94,8 @@ depois os mais pesados.
 O exportador copia o recurso completo, confere SHA-256 e acrescenta as roupas
 no mesmo recurso. Mantém UUIDs, coleções e índices nativos das peças existentes;
 não oferece inserção antes de peças publicadas nem substituição por este MCP.
+A cópia confere até quatro arquivos em paralelo, mantendo a verificação de cada
+arquivo e o descarte da saída se qualquer cópia falhar.
 
 Por padrão (`appendToLatestCollection` = `true`), os componentes entram **no fim**
 da última coleção `pcs` de cada gênero — a última declarada em `data/pcs` no
@@ -127,6 +132,8 @@ A saída contém:
   `reusedDrawables` identifica os drawables reaproveitados e apenas suas novas
   texturas, com os índices efetivos. `addedItems` conta somente os novos 3Ds;
   `appendedCollections` também inclui coleções que receberam apenas texturas.
+  `reusedIncomingItems` relaciona cada UUID de entrada reaproveitado ao drawable
+  de destino e às novas texturas, inclusive quando o destino nasceu nessa remessa.
 - `update.fcsproj`: projeto para abrir no Studio, com referências absolutas aos
   assets originais e ao pacote extraído. Salve pela interface para copiar os assets
   para um projeto portátil antes de mover ou apagar essas pastas.
@@ -151,7 +158,7 @@ globais do servidor. Faça o teste no jogo antes de publicar.
 
 `export_clothing_photos` recebe uma lista explícita de UUIDs e fotografa todas as
 variantes dessas peças usando o renderizador do Studio em uma thread STA. A pasta
-de saída deve ser nova e ficar fora do recurso. Máscaras, cabelos e acessórios
+de saída deve ser nova e ficar fora do recurso. Chapéus, máscaras, cabelos e acessórios
 faciais usam o ped da instalação GTA V configurada. As imagens usam WebP de 512 px,
 qualidade 85 e o mesmo fundo cinza da exportação pela interface. O manifesto
 `photo-manifest.json` registra peça, textura, endereço nativo, caminho e SHA-256.

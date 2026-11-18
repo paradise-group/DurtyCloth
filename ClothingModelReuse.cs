@@ -29,9 +29,10 @@ public sealed class ClothingModelMatcher(Func<string, string> resolve)
 
     public bool Identical(ClothItem existing, ClothItem incoming)
     {
+        static bool IsRigid(ClothItem item) => (item.OriginalModelFileName ?? item.ModelPath).EndsWith("_r.ydd", StringComparison.OrdinalIgnoreCase);
         if (existing.IsDummy || incoming.IsDummy || existing.Gender != incoming.Gender || existing.Category != incoming.Category
             || incoming.InsertBeforeItemId is not null || existing.AlternateModelPaths.Count != incoming.AlternateModelPaths.Count
-            || (existing.PhysicsPath is null) != (incoming.PhysicsPath is null)) return false;
+            || (existing.PhysicsPath is null) != (incoming.PhysicsPath is null) || IsRigid(existing) != IsRigid(incoming)) return false;
         // The same mesh with different runtime behaviour is a different clothing item.
         string Metadata(ClothItem item) => JsonSerializer.Serialize(new { item.HairOption, item.HoodieHairs, item.HairCutValue,
             item.HeelHeight, item.FirstPersonMaskModel, item.HasFirstPersonModel, item.MaskOffsetX, item.MaskOffsetY,
@@ -51,6 +52,7 @@ public static class ResourceTextureReuse
         var used = new Dictionary<Guid, int>();
         var result = new List<ClothingModelReuse>();
         var metadata = new Dictionary<string, XDocument>();
+        var pendingTargets = new List<ClothItem>();
         foreach (var incoming in plan.AddedItems)
         {
             if (CollectionIndices.ComponentSlot(incoming.Category) < 0 || CollectionInsertion.HasCompanionMetadata(incoming)) continue;
@@ -79,6 +81,16 @@ public static class ResourceTextureReuse
                 used[entry.Id] = used.GetValueOrDefault(entry.Id) + incoming.TexturePaths.Count;
                 result.Add(new(incoming, entry.Id));
                 break;
+            }
+            if (result.Any(reuse => reuse.Incoming.Id == incoming.Id)) continue;
+            var pendingTarget = pendingTargets.FirstOrDefault(target =>
+                target.TexturePaths.Count + used.GetValueOrDefault(target.Id) + incoming.TexturePaths.Count <= ClothingModelMatcher.TextureCapacity
+                && matcher.Identical(target, incoming));
+            if (pendingTarget is null) pendingTargets.Add(incoming);
+            else
+            {
+                used[pendingTarget.Id] = used.GetValueOrDefault(pendingTarget.Id) + incoming.TexturePaths.Count;
+                result.Add(new(incoming, pendingTarget.Id));
             }
         }
         return result;

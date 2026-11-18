@@ -71,7 +71,7 @@ public static class ClothingPhotoExporter
                 var model = ModelPreview.Read(Resolve(entry.ModelFile!), false, preserveAllTriangles: true);
                 var category = ClothCatalog.ResolveType(entry.ModelFile!).Category;
                 var gender = entry.Model == "mp_m_freemode_01" ? "male" : "female";
-                var needsPed = entry.Kind == "component" && entry.Slot is 0 or 1 or 2 || entry.Kind == "prop" && entry.Slot is 1 or 2 or 3;
+                var needsPed = entry.Kind == "component" && entry.Slot is 0 or 1 or 2 || entry.Kind == "prop" && entry.Slot is 0 or 1 or 2 or 3;
                 PhotoPed? ped = null;
                 if (needsPed && !peds.TryGetValue(entry.Gender, out ped))
                 {

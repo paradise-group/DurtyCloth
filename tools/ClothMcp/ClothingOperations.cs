@@ -238,6 +238,17 @@ public static class ClothingOperations
             if (newErrors.Length > 0) throw new InvalidDataException(string.Join("\n", newErrors));
             var addedIds = package.Items.Select(item => item.Id).ToHashSet();
             var added = map.Entries.Where(entry => addedIds.Contains(entry.Id)).ToArray();
+            var textureOwners = map.Entries.SelectMany(entry => entry.Textures.Select(texture => new { texture.Id, Entry = entry }))
+                .ToDictionary(owner => owner.Id, owner => owner.Entry);
+            var outputIds = map.Entries.Select(entry => entry.Id).ToHashSet();
+            var reusedIncomingItems = package.Items.Where(item => !outputIds.Contains(item.Id)).Select(item =>
+            {
+                var target = textureOwners[item.TextureIds[0]];
+                if (item.TextureIds.Any(id => textureOwners[id].Id != target.Id))
+                    throw new InvalidDataException("An incoming texture batch was split across drawables: " + item.Name);
+                return new { incomingId = item.Id, item.Name, targetId = target.Id, target.Gender, target.Collection, target.Slot, target.Index,
+                    textures = target.Textures.Where(texture => item.TextureIds.Contains(texture.Id)).ToArray() };
+            }).ToArray();
             var reused = map.Entries.Where(entry => knownIds.Contains(entry.Id))
                 .Select(entry => new { entry.Id, entry.Gender, entry.Collection, entry.Slot, entry.Index,
                     textures = entry.Textures.Where(texture => !original.Entries.Single(old => old.Id == entry.Id).Textures.Contains(texture)).ToArray() })
@@ -254,7 +265,7 @@ public static class ClothingOperations
             var report = new { sourceRoot = resourceRoot, packageRoot, output, originalItems = original.Entries.Count,
                 addedItems = added.Length, addedTextureFiles = package.Textures, originalIdsAndAddressesPreserved = true,
                 originalFilesHashVerified = true, baselineValidationErrors = baseline.Errors, validation,
-                addedCollections = Collections(false), appendedCollections = Collections(true), reusedDrawables = reused,
+                addedCollections = Collections(false), appendedCollections = Collections(true), reusedDrawables = reused, reusedIncomingItems,
                 packageWarnings = package.Warnings, additions = added, deployment = "Prepared only. Faction wardrobe configuration and in-game testing are separate steps." };
             var reportPath = Path.Combine(outputParent, "update-report.json");
             File.WriteAllText(reportPath, JsonSerializer.Serialize(report, JsonOptions));
@@ -265,7 +276,7 @@ public static class ClothingOperations
             File.WriteAllText(projectPath, JsonSerializer.Serialize(preview, new JsonSerializerOptions { WriteIndented = true }));
             File.Delete(ownershipFile);
             return new { output, projectPath, reportPath, originalItems = original.Entries.Count, addedItems = added.Length,
-                addedTextureFiles = package.Textures, reusedDrawables = reused.Length,
+                addedTextureFiles = package.Textures, reusedDrawables = reused.Length, reusedIncomingItems = reusedIncomingItems.Length,
                 addedCollections = Collections(false), appendedCollections = Collections(true),
                 packageWarnings = package.Warnings.Count(issue => issue.Severity == AssetBudget.Warning),
                 packageNotices = package.Warnings.Count(issue => issue.Severity == AssetBudget.Notice), baselineValidationErrors = baseline.Errors };

@@ -264,7 +264,7 @@ try
         Directory.CreateDirectory(folder);
         var model = Path.Combine(folder, $"{code}_{index:D3}_u.ydd");
         var texture = Path.Combine(folder, $"{code}_diff_{index:D3}_a_uni.ytd");
-        File.WriteAllBytes(model, [1, 2, 3]);
+        File.WriteAllBytes(model, System.Text.Encoding.UTF8.GetBytes(gender + "/" + code + "/" + index + "/" + folder));
         File.WriteAllBytes(texture, [4, 5, 6]);
         var item = ClothCatalog.Import([model, texture]).Single();
         item.Gender = gender;
