@@ -19,6 +19,13 @@ public static class ResourceUpdateExporter
         var additions = snapshot.Items.Where(item => !originalFiles.Contains(ModelName(item))).ToList();
         snapshot.Items = snapshot.Items.Except(additions).ToList();
         var original = OriginalResourceExporter.Validate(snapshot, resolve, sourceRoot, progress);
+        var persistedMap = Path.Combine(sourceRoot, ClothingIdentityMap.FileName);
+        if (File.Exists(persistedMap))
+        {
+            var persisted = ClothingIdentityMap.Read(persistedMap);
+            if (persisted.Entries.Select(entry => entry.Id).ToHashSet().SetEquals(original.Entries.Select(entry => entry.Id)))
+                original = persisted;
+        }
         if (additions.Any(item => item.IsDummy))
             throw new InvalidDataException("Resource updates require real clothing assets for added items.");
         return new(snapshot, original, additions);
@@ -42,6 +49,10 @@ public static class ResourceUpdateExporter
         string? createdOutput = null;
         try
         {
+            var reuses = ResourceTextureReuse.Plan(plan, source.Root, resolve);
+            var reusedIds = reuses.Select(reuse => reuse.Incoming.Id).ToHashSet();
+            plan = plan with { AddedItems = plan.AddedItems.Where(item => !reusedIds.Contains(item.Id)).ToList() };
+            progress?.Report($"Reusing {reuses.Count} identical models with room for all incoming textures; adding {plan.AddedItems.Count} drawables.");
             var pending = plan.AddedItems.Where(item => item.InsertBeforeItemId is null).ToList();
             var appends = appendToLatestCollection ? CollectionInsertion.PlanAppends(source.Root, pending) : [];
             var appendedIds = appends.Select(append => append.Item.Id).ToHashSet();
@@ -74,6 +85,9 @@ public static class ResourceUpdateExporter
                 Merge(export.Root, output);
                 File.AppendAllText(manifest, "\n" + export.Declarations);
             }
+            ResourceTextureReuse.Apply(output, combined, reuses, resolve);
+            identities = new ClothingIdentityDocument(1, combined.Values.ToList(), true);
+            ClothingIdentityMap.Validate(identities);
             ClothingIdentityMap.Write(identities, output);
             if (!File.ReadAllText(manifest).Contains("clothing-ids.client.lua", StringComparison.Ordinal))
                 File.AppendAllText(manifest, "\nfiles { 'clothing-identities.json' }\nclient_script 'clothing-ids.client.lua'\n");
@@ -81,6 +95,7 @@ public static class ResourceUpdateExporter
                 "Original collections are retained. Explicit insert-before operations shift only the requested addon components and update their YMT, shop metadata, native filenames and identity map.\n" +
                 "Appends add components after the last native index of the latest pcs collection of each gender, without shifting any index.\n" +
                 "Other additions are generated in separate collections inside this same resource.\n" +
+                $"Reused identical models: {reuses.Count}; appended texture variants: {reuses.Sum(reuse => reuse.Incoming.TexturePaths.Count)}. Whole batches only, up to A-Z.\n" +
                 "Existing item and texture UUIDs are retained, including shifted items.\n" +
                 "clothing-identities.json combines the original and added item/texture UUIDs.\n" +
                 $"Original items: {plan.OriginalIdentities.Entries.Count}; added items: {plan.AddedItems.Count}; native insertions: {insertions.Sum(insertion => insertion.AddedIds.Count) - appends.Count}; appended: {appends.Count}.\n");

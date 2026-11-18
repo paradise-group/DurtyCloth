@@ -16,19 +16,22 @@ public static class CatalogMerger
         var pending = new List<(ClothItem Target, string[] Textures, string[] Models, string? Physics)>();
         var newPieces = new List<ClothItem>();
         var replaced = new List<ClothItem>();
+        var matcher = new ClothingModelMatcher(resolvePath);
         foreach (var candidate in incoming)
         {
             var model = Path.GetFullPath(candidate.ModelPath);
             var identity = Identity(candidate, model);
             if (!existing.ContainsKey(identity))
             {
-                var possible = existing.Values.Distinct().Where(item => item.Category == candidate.Category && item.Gender == candidate.Gender && item.SourceIndex == candidate.SourceIndex &&
-                    ClothCatalog.SameCollection(item.OriginalModelFileName ?? item.ModelPath, candidate.OriginalModelFileName ?? candidate.ModelPath) && File.Exists(resolvePath(item.ModelPath))).ToArray();
+                var possible = existing.Values.Distinct().Where(item => item.Category == candidate.Category && item.Gender == candidate.Gender
+                    && (project.SourceResourceRoot is null || item.SourceIndex == candidate.SourceIndex &&
+                        ClothCatalog.SameCollection(item.OriginalModelFileName ?? item.ModelPath, candidate.OriginalModelFileName ?? candidate.ModelPath))
+                    && item.TexturePaths.Count + pending.Where(change => ReferenceEquals(change.Target, item)).Sum(change => change.Textures.Length)
+                        + candidate.TexturePaths.Count <= ClothingModelMatcher.TextureCapacity
+                    && File.Exists(resolvePath(item.ModelPath))).ToArray();
                 if (possible.Length > 0)
                 {
-                    static string HashModel(string path) { using var file = File.OpenRead(path); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file)); }
-                    var fingerprint = HashModel(model);
-                    var identical = possible.FirstOrDefault(item => HashModel(resolvePath(item.ModelPath)) == fingerprint);
+                    var identical = possible.FirstOrDefault(item => matcher.Identical(item, candidate));
                     if (identical is not null) existing[identity] = identical;
                 }
             }

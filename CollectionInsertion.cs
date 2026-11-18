@@ -181,7 +181,7 @@ public static class CollectionInsertion
         return new(filesRoot, replaced, entries.Concat(addedEntries).ToList(), placements.Select(placement => placement.Item.Id).ToHashSet());
     }
 
-    private static bool HasCompanionMetadata(ClothItem item) =>
+    internal static bool HasCompanionMetadata(ClothItem item) =>
         item.HasFirstPersonModel || item.TextureEffects.Any(effect => !string.IsNullOrWhiteSpace(effect.TimeCycleModifier))
         || !string.IsNullOrWhiteSpace(item.FirstPersonMaskModel) || item.HeelHeight != 0 || item.HairOption != "Show hairs" || item.HoodieHairs;
 

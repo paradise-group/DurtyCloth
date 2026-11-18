@@ -7,6 +7,29 @@ using System.Xml.Linq;
 
 try
 {
+    if (args.Length == 3 && args[0] == "--reuse-real-fixture")
+    {
+        var packageRoot = Path.GetFullPath(args[1]);
+        var fixtureRoot = Path.GetFullPath(args[2]);
+        if (Directory.Exists(fixtureRoot)) throw new IOException("Use a new fixture folder.");
+        var items = ClothCatalog.Import(Directory.EnumerateFiles(packageRoot, "*", SearchOption.AllDirectories));
+        foreach (var item in items)
+        {
+            item.Gender = Path.GetRelativePath(packageRoot, item.ModelPath).Split(Path.DirectorySeparatorChar)[0] == "F" ? "Feminino" : "Masculino";
+            item.Id = Guid.NewGuid();
+            item.TexturePaths = item.TexturePaths.Take(1).ToList();
+            item.OriginalTextureFileNames = item.OriginalTextureFileNames.Take(1).ToList();
+            item.TextureIds.Clear();
+        }
+        var realFixture = new ClothProject { Name = "reuse_real", DlcName = "reuse_real", UsePermanentClothingIds = true, Items = items };
+        Console.WriteLine(AddonExporter.Export(realFixture, Path.GetFullPath, fixtureRoot));
+        return;
+    }
+    if (args.Length == 2 && args[0] == "--reuse-test")
+    {
+        ReuseTests.Run(Path.GetFullPath(args[1]));
+        return;
+    }
     if (args.Length == 1 && args[0] == "--eta-test")
     {
         ProgressEstimateTests.Run();
@@ -157,7 +180,7 @@ try
         Directory.CreateDirectory(folder);
         var model = Path.Combine(folder, $"mp_m_freemode_01_{collection}^jbib_{index:D3}_u.ydd");
         var texture = Path.Combine(folder, $"mp_m_freemode_01_{collection}^jbib_diff_{index:D3}_a_uni.ytd");
-        File.WriteAllBytes(model, [1, 2, 3]);
+        File.WriteAllBytes(model, System.Text.Encoding.UTF8.GetBytes(collection + "/" + index));
         File.WriteAllBytes(texture, [4, 5, 6]);
         return ClothCatalog.Import([model, texture]).Single();
     }
@@ -183,7 +206,7 @@ try
     Check(imported.Items.Select(item => item.Id).ToHashSet().SetEquals(fixture.Items.Select(item => item.Id)), "Reimport lost IDs");
     var addedAgain = Item(Path.Combine(root, "next-incoming"), "second", 0);
     imported.Items.Add(addedAgain);
-    var importedMap = OriginalResourceExporter.Describe(new() { Items = imported.Items.Where(item => item.Id != addedAgain.Id).ToList() });
+    var importedMap = ClothingIdentityMap.Read(Path.Combine(updated, ClothingIdentityMap.FileName));
     var second = ResourceUpdateExporter.Export(imported, Path.GetFullPath, updated, Path.Combine(root, "second"));
     Verify(updated, second, importedMap, 1);
 

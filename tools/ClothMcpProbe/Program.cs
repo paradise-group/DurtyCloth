@@ -68,7 +68,10 @@ if (args.Length == 5)
     if (args[1] == "--photos")
     {
         using var report = JsonDocument.Parse(File.ReadAllText(args[3]));
-        var ids = report.RootElement.GetProperty("additions").EnumerateArray().Select(entry => entry.GetProperty("id").GetString()).ToArray();
+        var ids = report.RootElement.GetProperty("additions").EnumerateArray().Select(entry => entry.GetProperty("id").GetString())
+            .Concat(report.RootElement.TryGetProperty("reusedDrawables", out var reused)
+                ? reused.EnumerateArray().Select(entry => entry.GetProperty("id").GetString()) : [])
+            .Distinct().ToArray();
         var progress = new Progress<ProgressNotificationValue>(value => Console.WriteLine(value.Message));
         var result = await client.CallToolAsync("export_clothing_photos", new Dictionary<string, object?>
         { ["resourceRoot"] = args[2], ["itemIds"] = ids, ["outputRoot"] = args[4] }, progress, cancellationToken: CancellationToken.None);

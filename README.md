@@ -74,6 +74,13 @@ Aplicativo Windows independente para organizar arquivos de roupas GTA V/FiveM.
   alternativos e YLD que ainda faltam, sem duplicar a peça ou os caminhos já
   associados. A importação confere o limite de 26 variantes antes de alterar
   o projeto.
+- Nas futuras atualizações de recursos, modelos idênticos do mesmo gênero/slot
+  são reaproveitados somente se todas as texturas novas couberem nas 26 posições
+  A–Z. Com duas vagas e dez texturas, entra um drawable novo com as dez juntas.
+  Não reorganiza roupas publicadas nem muda seus IDs/índices. Em projetos novos,
+  a importação também compara o conteúdo do modelo, alternativas e física entre
+  pastas diferentes. Em recursos importados, o reaproveitamento nativo é feito
+  na preparação/build, preservando a validação dos assets de origem.
 - Associação de YTD por coleção, gênero, tipo e índice; YLD pelo nome do
   modelo, aceitando o nome físico sem o sufixo `_u` ou `_r` do YDD. Ao importar
   um YDD isolado, procura também os YDD alternativos

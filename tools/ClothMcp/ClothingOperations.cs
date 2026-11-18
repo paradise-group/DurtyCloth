@@ -206,9 +206,13 @@ public static class ClothingOperations
             if (item.PhysicsPath is not null) YldInspector.CountClothes(item.PhysicsPath);
         }
         var project = OpenResource(resourceRoot, progress);
-        var original = OriginalResourceExporter.Describe(project);
+        var original = File.Exists(Path.Combine(resourceRoot, ClothingIdentityMap.FileName))
+            ? ClothingIdentityMap.Read(Path.Combine(resourceRoot, ClothingIdentityMap.FileName))
+            : OriginalResourceExporter.Describe(project);
         var knownIds = original.Entries.Select(entry => entry.Id).ToHashSet();
-        if (package.Items.Any(item => knownIds.Contains(item.Id))) throw new InvalidDataException("This package already has item IDs in the source resource; inspect before importing again.");
+        var knownTextureIds = original.Entries.SelectMany(entry => entry.Textures).Select(texture => texture.Id).ToHashSet();
+        if (package.Items.Any(item => knownIds.Contains(item.Id) || item.TextureIds.Any(knownTextureIds.Contains)))
+            throw new InvalidDataException("This package already has item or texture IDs in the source resource; inspect before importing again.");
         project.Items.AddRange(package.Items);
         cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(outputParent);
@@ -222,32 +226,48 @@ public static class ClothingOperations
                 new BuildProgress(progress), gameFolder ?? GamePedAssets.FindGameFolder(), appendToLatestCollection);
             var map = ClothingIdentityMap.Read(Path.Combine(output, ClothingIdentityMap.FileName));
             foreach (var entry in original.Entries)
-                if (JsonSerializer.Serialize(map.Entries.Single(current => current.Id == entry.Id)) != JsonSerializer.Serialize(entry))
+            {
+                var current = map.Entries.Single(current => current.Id == entry.Id);
+                if (JsonSerializer.Serialize(current with { Textures = entry.Textures }) != JsonSerializer.Serialize(entry)
+                    || entry.Textures.Any(texture => !current.Textures.Contains(texture)))
                     throw new InvalidDataException("An original UUID or native address changed: " + entry.Name);
+            }
             var validation = ValidateResource(output);
             var baseline = ValidateResource(resourceRoot);
             var newErrors = validation.Errors.Except(baseline.Errors, StringComparer.Ordinal).ToArray();
             if (newErrors.Length > 0) throw new InvalidDataException(string.Join("\n", newErrors));
             var addedIds = package.Items.Select(item => item.Id).ToHashSet();
             var added = map.Entries.Where(entry => addedIds.Contains(entry.Id)).ToArray();
+            var reused = map.Entries.Where(entry => knownIds.Contains(entry.Id))
+                .Select(entry => new { entry.Id, entry.Gender, entry.Collection, entry.Slot, entry.Index,
+                    textures = entry.Textures.Where(texture => !original.Entries.Single(old => old.Id == entry.Id).Textures.Contains(texture)).ToArray() })
+                .Where(entry => entry.textures.Length > 0).ToArray();
             var originalCollections = original.Entries.Select(entry => (entry.Model, entry.Collection)).ToHashSet();
-            object[] Collections(bool existing) => added.Where(entry => originalCollections.Contains((entry.Model, entry.Collection)) == existing)
+            object[] Collections(bool existing) => added.Concat(map.Entries.Where(entry => reused.Any(reuse => reuse.Id == entry.Id)))
+                .Where(entry => originalCollections.Contains((entry.Model, entry.Collection)) == existing)
                 .GroupBy(entry => new { entry.Collection, entry.Gender }).OrderBy(group => group.Key.Collection, StringComparer.Ordinal)
                 .Select(group => (object)new { collection = group.Key.Collection, gender = group.Key.Gender, items = group.Count() }).ToArray();
-            if (added.Length != package.Items.Count || map.Entries.Count != original.Entries.Count + added.Length)
+            var incomingTextureIds = package.Items.SelectMany(item => item.TextureIds).ToHashSet();
+            var writtenTextureIds = added.SelectMany(entry => entry.Textures).Concat(reused.SelectMany(entry => entry.textures)).Select(texture => texture.Id).ToHashSet();
+            if (!incomingTextureIds.SetEquals(writtenTextureIds) || map.Entries.Count != original.Entries.Count + added.Length)
                 throw new InvalidDataException("The output identity count does not match the planned update.");
             var report = new { sourceRoot = resourceRoot, packageRoot, output, originalItems = original.Entries.Count,
                 addedItems = added.Length, addedTextureFiles = package.Textures, originalIdsAndAddressesPreserved = true,
                 originalFilesHashVerified = true, baselineValidationErrors = baseline.Errors, validation,
-                addedCollections = Collections(false), appendedCollections = Collections(true),
+                addedCollections = Collections(false), appendedCollections = Collections(true), reusedDrawables = reused,
                 packageWarnings = package.Warnings, additions = added, deployment = "Prepared only. Faction wardrobe configuration and in-game testing are separate steps." };
             var reportPath = Path.Combine(outputParent, "update-report.json");
             File.WriteAllText(reportPath, JsonSerializer.Serialize(report, JsonOptions));
             var projectPath = Path.Combine(outputParent, "update.fcsproj");
-            File.WriteAllText(projectPath, JsonSerializer.Serialize(project, new JsonSerializerOptions { WriteIndented = true }));
+            var preview = OpenResource(output);
+            foreach (var item in preview.Items)
+                item.Name = map.Entries.Single(entry => entry.Id == item.Id).Name;
+            File.WriteAllText(projectPath, JsonSerializer.Serialize(preview, new JsonSerializerOptions { WriteIndented = true }));
             File.Delete(ownershipFile);
             return new { output, projectPath, reportPath, originalItems = original.Entries.Count, addedItems = added.Length,
-                addedTextureFiles = package.Textures, packageWarnings = package.Warnings.Count(issue => issue.Severity == AssetBudget.Warning),
+                addedTextureFiles = package.Textures, reusedDrawables = reused.Length,
+                addedCollections = Collections(false), appendedCollections = Collections(true),
+                packageWarnings = package.Warnings.Count(issue => issue.Severity == AssetBudget.Warning),
                 packageNotices = package.Warnings.Count(issue => issue.Severity == AssetBudget.Notice), baselineValidationErrors = baseline.Errors };
         }
         catch

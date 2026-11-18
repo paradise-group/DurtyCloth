@@ -42,8 +42,20 @@ Extraia `.rar`/`.zip` antes de passar a pasta. O MCP não executa arquivos do pa
 Ele reconhece os nomes GTA e pastas `male`/`female`, `Masculino`/`Feminino` e `M`/`F`.
 Pastas de corporações com nomes de arquivos iguais recebem UUIDs distintos e
 repetíveis pelo caminho relativo no pacote. Mantenha essa organização entre
-inspeção e construção. Não há deduplicação entre corporações: cada YDD principal
-e todas as suas variantes continuam sendo uma peça separada.
+inspeção e construção. Antes de criar outro drawable, a atualização compara o
+YDD principal, modelos alternativos e física por SHA-256, no mesmo gênero e slot.
+Um modelo idêntico só é reaproveitado se comportar **todas** as variantes do lote,
+considerando também os lotes anteriores dessa atualização. São 26 posições,
+A–Z (índices 0–25), conforme a
+[documentação do Durty](https://docs.gta.clothing/game-mechanics/drawable-types-and-textures).
+Exemplo: 24 posições ocupadas e 10 texturas chegando geram um novo drawable com
+as 10 juntas; o lote nunca é dividido para preencher duas vagas. A busca pode
+usar outro drawable idêntico com espaço suficiente. Texturas novas entram depois
+da última posição nativa, sem substituir letras existentes. O UUID do drawable
+reaproveitado e todos os UUIDs anteriores permanecem iguais; cada textura nova
+mantém o UUID que recebeu no pacote. Texturas iguais também contam no lote.
+Metadados incompatíveis, props ou metadados de primeira pessoa, cabelo e salto
+continuam exigindo drawable separado. Não há reorganização de peças publicadas.
 
 Gênero indefinido, slot desconhecido, YTD ausente, mais de 26 variantes e assets
 sem associação impedem a preparação. Os binários YDD/YTD/YLD são lidos antes de
@@ -93,10 +105,11 @@ são reescritos somente com os acréscimos, e um slot que a coleção ainda não
 - a peça é um prop ou tem metadados de primeira pessoa, cabelo ou salto, que o
   acréscimo nativo não remapeia.
 
-Com `appendToLatestCollection` = `false`, toda atualização cria uma coleção nova
-por gênero, como antes. Em coleções novas, categoria/slot não divide coleções;
+Com `appendToLatestCollection` = `false`, os drawables que não puderam ser
+reaproveitados entram em coleção nova por gênero. Em coleções novas, categoria/slot não divide coleções;
 componentes e props compartilham a mesma.
 A repetição do mesmo pacote no recurso já atualizado é rejeitada pelos UUIDs.
+Essa proteção inclui os UUIDs de texturas anexadas a um drawable reaproveitado.
 
 A preparação pode copiar dezenas de GB. Configure um tempo de execução adequado
 no cliente. São enviadas notificações MCP de progresso quando o cliente fornece
@@ -111,6 +124,9 @@ A saída contém:
   e cada roupa/textura adicionada com UUID, collection e índice local. No nível
   superior, `addedCollections` lista cada coleção nova e `appendedCollections`
   cada coleção existente que recebeu peças, como `{ "collection", "gender", "items" }`.
+  `reusedDrawables` identifica os drawables reaproveitados e apenas suas novas
+  texturas, com os índices efetivos. `addedItems` conta somente os novos 3Ds;
+  `appendedCollections` também inclui coleções que receberam apenas texturas.
 - `update.fcsproj`: projeto para abrir no Studio, com referências absolutas aos
   assets originais e ao pacote extraído. Salve pela interface para copiar os assets
   para um projeto portátil antes de mover ou apagar essas pastas.
@@ -152,6 +168,8 @@ Não registra fotos automaticamente no servidor nem publica na CDN.
 - Para cada entrada de `appendedCollections`, compare o `.ymt` e o `_shop.meta`
   com a origem: os drawables e itens existentes devem continuar idênticos, e os
   novos índices devem continuar a partir do último de cada slot.
+  Em `reusedDrawables`, apenas `aTexData`, o total de texturas do slot e os novos
+  registros de textura do shop são acrescentados; o YDD não muda.
 - Confira se `files { 'data/pcs/*' }` aparece uma única vez no manifesto.
 - Compare com a origem: quantidade de entradas originais, coleções, índices e
   UUIDs de peças/texturas devem ser preservados.
@@ -175,6 +193,14 @@ de coleção/índice antes desse uso. Publique na ordem `web-assets` →
 ```powershell
 dotnet run --project tools/ClothMcpProbe/ClothMcpProbe.csproj -c Release -- D:/Git/DurtyCloth/publish-mcp/ParadiseClothMcp.exe
 ```
+
+`ResourceUpdateProbe --reuse-test <pasta-nova>` cobre lote inteiro, encaixe exato
+até Z, falta de espaço, busca de outro modelo idêntico, reserva entre lotes,
+diferenças de gênero/3D/metadados, importação no catálogo e preservação dos
+registros originais (inclusive nomes, proveniência e ordem).
+`ResourceUpdateProbe --reuse-real-fixture <pacote-real> <pasta-nova>` gera uma
+origem pequena com os modelos reais e uma variante por peça para testar a
+preparação MCP completa, sem alterar o recurso publicado.
 
 O probe usa um cliente do SDK oficial para negociar o protocolo, descobrir as
 seis ferramentas e verificar importação, UUIDs, paginação, erros de metadados,
