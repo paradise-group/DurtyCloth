@@ -53,6 +53,12 @@ Na exportação, o nome externo das texturas acompanha o modo do modelo e os
 metadados nativos: `_u` usa `_uni.ytd` e `_r` usa `_whi.ytd`. Um sufixo
 inconsistente no YTD de entrada é normalizado, tanto em drawables novos quanto
 nas texturas acrescentadas a um modelo idêntico. O conteúdo do YTD é preservado.
+`reuseExistingModels=false` em `prepare_clothing_update` força drawables separados
+somente para o pacote dessa chamada; o padrão continua `true`. Não altera nem
+reorganiza roupas já publicadas. Uma migração explícita de texturas pode conservar
+os IDs antigos indisponíveis com `redirectItemId`/`redirectTextureId`, apontando
+diretamente para uma variante ativa do mesmo modelo de ped, tipo e slot. O adaptador
+resolve a combinação antiga para o novo destino; o catálogo oculta a posição antiga.
 São 26 posições, A–Z (índices 0–25), conforme a
 [documentação do Durty](https://docs.gta.clothing/game-mechanics/drawable-types-and-textures).
 Exemplo: 24 posições ocupadas e 10 texturas chegando geram um novo drawable com

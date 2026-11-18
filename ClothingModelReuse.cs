@@ -29,7 +29,7 @@ public sealed class ClothingModelMatcher(Func<string, string> resolve)
     public bool Identical(ClothItem existing, ClothItem incoming)
     {
         static bool IsRigid(ClothItem item) => (item.OriginalModelFileName ?? item.ModelPath).EndsWith("_r.ydd", StringComparison.OrdinalIgnoreCase);
-        if (existing.IsDummy || incoming.IsDummy || existing.Gender != incoming.Gender || existing.Category != incoming.Category
+        if (!incoming.AllowModelReuse || existing.IsDummy || incoming.IsDummy || existing.Gender != incoming.Gender || existing.Category != incoming.Category
             || incoming.InsertBeforeItemId is not null || existing.AlternateModelPaths.Count != incoming.AlternateModelPaths.Count
             || (existing.PhysicsPath is null) != (incoming.PhysicsPath is null) || IsRigid(existing) != IsRigid(incoming)) return false;
         // The same mesh with different runtime behaviour is a different clothing item.

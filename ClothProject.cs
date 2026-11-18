@@ -129,6 +129,7 @@ public sealed class ClothItem
     public List<string> AlternateModelPaths { get; set; } = [];
     public List<string> TexturePaths { get; set; } = [];
     public List<string> OriginalTextureFileNames { get; set; } = [];
+    public bool AllowModelReuse { get; set; } = true;
     public List<string> TextureLabels { get; set; } = [];
     public string? PhysicsPath { get; set; }
     public string AudioPreset { get; set; } = "none";

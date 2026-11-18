@@ -39,9 +39,9 @@ public static class ClothingTools
     [McpServerTool(Name = "prepare_clothing_update", Destructive = false, OpenWorld = false)]
     [Description("Build a new reviewable copy of a FiveM clothing resource with every item from an extracted package added. First reuses byte-identical component models of the same gender/slot only if the entire incoming texture batch fits the 26 A-Z positions; otherwise keeps the whole batch in a new drawable. Published drawables are never consolidated. By default new components are appended after the last native index of the latest pcs collection of each gender (no index shifts, no new collection); a new collection per gender is created only when there is no pcs collection yet, a slot would exceed 128 drawables, or the item is a prop or needs companion metadata. appendToLatestCollection=false creates new collections for drawables that could not be reused. Reuses the studio exporter, preserves original files, native indices and UUIDs, validates package binaries, and writes a project and per-item mapping report. outputParent must not exist and must be outside both inputs. Never installs, overwrites, restarts or changes faction wardrobe scripts. Can copy many GB; allow time for hash verification.")]
     public static async Task<string> PrepareUpdate(string resourceRoot, string packageRoot, string outputParent, IProgress<ProgressNotificationValue> progress,
-        string? gameFolder = null, bool appendToLatestCollection = true, CancellationToken cancellationToken = default)
+        string? gameFolder = null, bool appendToLatestCollection = true, bool reuseExistingModels = true, CancellationToken cancellationToken = default)
     {
-        try { return Json(await ClothingOperations.PrepareUpdate(resourceRoot, packageRoot, outputParent, gameFolder, cancellationToken, new McpProgress(progress), appendToLatestCollection)); }
+        try { return Json(await ClothingOperations.PrepareUpdate(resourceRoot, packageRoot, outputParent, gameFolder, cancellationToken, new McpProgress(progress), appendToLatestCollection, reuseExistingModels)); }
         catch (Exception error) when (error is not OperationCanceledException) { throw new McpException(error.Message, error); }
     }
 

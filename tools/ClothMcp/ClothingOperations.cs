@@ -177,15 +177,15 @@ public static class ClothingOperations
 
     public static async Task<object> PrepareUpdate(string resourceRoot, string packageRoot, string outputParent,
         string? gameFolder = null, CancellationToken cancellationToken = default, IProgress<string>? progress = null,
-        bool appendToLatestCollection = true)
+        bool appendToLatestCollection = true, bool reuseExistingModels = true)
     {
         await BuildGate.WaitAsync(cancellationToken);
-        try { return await Task.Run(() => Build(resourceRoot, packageRoot, outputParent, gameFolder, appendToLatestCollection, cancellationToken, progress), cancellationToken); }
+        try { return await Task.Run(() => Build(resourceRoot, packageRoot, outputParent, gameFolder, appendToLatestCollection, reuseExistingModels, cancellationToken, progress), cancellationToken); }
         finally { BuildGate.Release(); }
     }
 
     private static object Build(string resourceRoot, string packageRoot, string outputParent, string? gameFolder,
-        bool appendToLatestCollection, CancellationToken cancellationToken, IProgress<string>? progress)
+        bool appendToLatestCollection, bool reuseExistingModels, CancellationToken cancellationToken, IProgress<string>? progress)
     {
         resourceRoot = Path.GetFullPath(resourceRoot);
         packageRoot = Path.GetFullPath(packageRoot);
@@ -198,6 +198,7 @@ public static class ClothingOperations
         if (package.Errors.Count > 0) throw new InvalidDataException(string.Join("\n", package.Errors));
         foreach (var item in package.Items)
         {
+            item.AllowModelReuse = reuseExistingModels;
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report("Validating package clothing: " + item.Name);
             ModelPreview.Read(item.ModelPath, false);

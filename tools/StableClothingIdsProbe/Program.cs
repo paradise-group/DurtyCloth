@@ -57,6 +57,18 @@ project.UsePermanentClothingIds = false;
 Check(CollectionIndices.Validate(project).Count > 0, "Legacy protection was lost");
 project.UsePermanentClothingIds = true;
 Fixture("after", afterMap);
+var redirectTarget = afterMap.Entries.Single(entry => entry.Id == second.Id);
+var redirectedMap = afterMap with { Entries = afterMap.Entries.Select(entry => entry.Id != itemId ? entry : entry with
+{
+    Textures = entry.Textures.Select(texture => texture.Id != textureId ? texture : texture with
+        { Available = false, RedirectItemId = redirectTarget.Id, RedirectTextureId = redirectTarget.Textures[0].Id }).ToList()
+}).ToList() };
+ClothingIdentityMap.Validate(redirectedMap);
+Fixture("redirected", redirectedMap);
+var wrongRedirect = redirectedMap with { Entries = redirectedMap.Entries.Select(entry => entry.Id != redirectTarget.Id ? entry : entry with { Slot = 4 }).ToList() };
+try { ClothingIdentityMap.Validate(wrongRedirect); throw new Exception("Cross-slot redirect accepted"); } catch (InvalidDataException) { }
+var redirectJson = JsonSerializer.Serialize(redirectedMap);
+Check(JsonSerializer.Serialize(JsonSerializer.Deserialize<ClothingIdentityDocument>(redirectJson)) == redirectJson, "Texture redirects lost on JSON round-trip");
 var snapshot = JsonSerializer.Deserialize<ClothProject>(JsonSerializer.Serialize(project))!;
 Check(snapshot.Items[0].Id == itemId && snapshot.Items[0].TextureIds[1] == textureId, "JSON lost identity");
 var bundle = Path.Combine(root, "project.fcsbundle");
@@ -75,6 +87,23 @@ foreach (var entry in afterMap.Entries.Where(entry => entry.Available))
 Check(File.ReadAllText(Path.Combine(output, "fxmanifest.lua")).Contains("client_script 'clothing-ids.client.lua'"), "Adapter not registered");
 var imported = ClothCatalog.Import(Directory.EnumerateFiles(Path.Combine(output, "stream"), "*", SearchOption.AllDirectories));
 ClothingIdentityMap.Restore(output, imported);
+var redirectFirst = Item("RedirectFirst", "jbib");
+var redirectSecond = Item("RedirectSecond", "jbib");
+var redirectSource = AddonExporter.Export(new ClothProject { Name = "redirect_fixture", DlcName = "redirect_fixture",
+    UsePermanentClothingIds = true, Items = [redirectFirst, redirectSecond] }, Path.GetFullPath, Path.Combine(root, "redirect-fixture"));
+var redirectSourceMap = ClothingIdentityMap.Read(Path.Combine(redirectSource, ClothingIdentityMap.FileName));
+var retiredFile = redirectSourceMap.Entries.Single(entry => entry.Id == redirectFirst.Id).Textures[0].File!;
+File.Delete(Directory.GetFiles(redirectSource, retiredFile, SearchOption.AllDirectories).Single());
+var placeholderMap = redirectSourceMap with { Entries = redirectSourceMap.Entries.Select(entry => entry with
+    { Textures = entry.Textures.Select(texture => texture.Id == redirectFirst.TextureIds[0]
+        ? texture with { File = null, Available = false, RedirectItemId = redirectSecond.Id, RedirectTextureId = redirectSecond.TextureIds[0] } : texture).ToList() }).ToList() };
+ClothingIdentityMap.Write(placeholderMap, redirectSource);
+var redirectItems = ClothCatalog.Import(Directory.GetFiles(Path.Combine(redirectSource, "stream"), "*", SearchOption.AllDirectories));
+ClothingIdentityMap.Restore(redirectSource, redirectItems);
+var redirectProject = new ClothProject { SourceResourceRoot = redirectSource, Items = redirectItems };
+var reimportedRedirects = OriginalResourceExporter.Validate(redirectProject, Path.GetFullPath, redirectSource);
+Check(reimportedRedirects.Entries.Single(entry => entry.Id == redirectFirst.Id).Textures[0].RedirectItemId == redirectSecond.Id,
+    "Inactive redirected texture slots must survive source reimport and subsequent resource updates.");
 Check(imported.Single(i => i.Id == itemId).TextureIds[1] == textureId, "Reimport lost identity");
 Check(imported.Single(i => i.Id == second.Id).TexturePaths[1] == "" && imported.Single(i => i.Id == reserved.Id).IsDummy, "Reimport lost reserved drawable/texture slots");
 Check(ClothingIdentityMap.SourceId("x.ydd", "Masculino") == ClothingIdentityMap.SourceId("X.YDD", "Masculino"), "Source identity changes across imports");

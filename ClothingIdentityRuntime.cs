@@ -105,6 +105,20 @@ local function resolve(id, textureId, ped)
     ped = ped or PlayerPedId()
     local record = items[id]
     if not record or not record.entry.available then return nil, 'item_missing' end
+    if textureId then
+        for _, candidate in ipairs(record.entry.textures) do
+            if candidate.id == textureId and candidate.redirectItemId then
+                local target = items[candidate.redirectItemId]
+                if candidate.available or not target or not target.entry.available
+                    or target.entry.model ~= record.entry.model or target.entry.kind ~= record.entry.kind
+                    or target.entry.slot ~= record.entry.slot or target.textures[candidate.redirectTextureId] == nil then
+                    return nil, 'texture_redirect_invalid'
+                end
+                id, textureId, record = candidate.redirectItemId, candidate.redirectTextureId, target
+                break
+            end
+        end
+    end
     local entry = record.entry
     if not DoesEntityExist(ped) or GetEntityModel(ped) ~= joaat(entry.model) then return nil, 'ped_model_mismatch' end
     local texture = textureId and record.textures[textureId]

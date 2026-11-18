@@ -2,12 +2,15 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace FooxClothStudio;
 
 public sealed record ClothingTextureIdentity(Guid Id, int Index, string? File, bool Available,
-    bool Inherited = false, Guid? AliasOf = null);
+    bool Inherited = false, Guid? AliasOf = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RedirectItemId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RedirectTextureId = null);
 public sealed record ClothingIdentityEntry(Guid Id, string Name, string Gender, string Model, string Kind,
     int Slot, string Collection, int Index, string? ModelFile, bool Available, List<ClothingTextureIdentity> Textures,
     string? SourceModelFile = null, int? SourceIndex = null, Guid? AliasOf = null);
@@ -119,6 +122,16 @@ public static class ClothingIdentityMap
             var textureIndexes = new HashSet<int>();
             foreach (var texture in entry.Textures)
             {
+                if (texture.RedirectItemId is not null || texture.RedirectTextureId is not null)
+                {
+                    var destination = document.Entries.SingleOrDefault(candidate => candidate.Id == texture.RedirectItemId);
+                    var destinationTexture = destination?.Textures.SingleOrDefault(candidate => candidate.Id == texture.RedirectTextureId);
+                    if (texture.Available || destination is null || !destination.Available || destination.Id == entry.Id
+                        || destination.Model != entry.Model || destination.Kind != entry.Kind || destination.Slot != entry.Slot
+                        || destinationTexture is null || !destinationTexture.Available || destinationTexture.RedirectItemId is not null
+                        || destinationTexture.RedirectTextureId is not null)
+                        throw new InvalidDataException("Redirecionamento de textura inválido: " + texture.Id);
+                }
                 var textureAlias = texture.AliasOf is Guid target ? entry.Textures.FirstOrDefault(candidate => candidate.Id == target) : null;
                 var validTextureAlias = document.PreserveSourceLayout && textureAlias is not null && textureAlias.Id != texture.Id && textureAlias.AliasOf is null && textureAlias.Index == texture.Index;
                 if (texture.Id == Guid.Empty || !ids.Add(texture.Id) || texture.Index < 0 ||

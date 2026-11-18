@@ -78,11 +78,11 @@ if (args.Length == 5)
         Console.WriteLine(Data(result).GetRawText());
         return;
     }
-    Check(args[1] == "--prepare", "Unknown action");
+    Check(args[1] is "--prepare" or "--prepare-separated", "Unknown action");
     var package = Data(await Call("inspect_clothing_package", new() { ["packageRoot"] = args[3] }));
     Console.WriteLine($"Package: {package.GetProperty("models")} models, {package.GetProperty("textures")} YTDs; {package.GetProperty("errors").GetArrayLength()} blockers, {package.GetProperty("warnings").GetArrayLength()} warnings.");
     File.WriteAllText(Path.Combine(Path.GetDirectoryName(args[3])!, "mcp-package-inspection.json"), package.GetRawText());
-    var output = Data(await Call("prepare_clothing_update", new() { ["resourceRoot"] = args[2], ["packageRoot"] = args[3], ["outputParent"] = args[4] }));
+    var output = Data(await Call("prepare_clothing_update", new() { ["resourceRoot"] = args[2], ["packageRoot"] = args[3], ["outputParent"] = args[4], ["reuseExistingModels"] = args[1] != "--prepare-separated" }));
     Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
     var validation = Data(await Call("validate_clothing_resource", new() { ["resourceRoot"] = output.GetProperty("output").GetString() }));
     Console.WriteLine($"Validated {validation.GetProperty("ymtsChecked")} YMTs, {validation.GetProperty("shopsChecked")} shops, {validation.GetProperty("identitiesChecked")} UUIDs. Issues: {validation.GetProperty("errors").GetArrayLength()}.");

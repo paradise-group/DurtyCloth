@@ -22,6 +22,10 @@ public static class OriginalResourceExporter
     public static ClothingIdentityDocument Describe(ClothProject project)
     {
         ClothingIdentityMap.GenerateMissing(project);
+        var persistedPath = string.IsNullOrWhiteSpace(project.SourceResourceRoot) ? null : Path.Combine(project.SourceResourceRoot, ClothingIdentityMap.FileName);
+        var persisted = persistedPath is not null && File.Exists(persistedPath)
+            ? ClothingIdentityMap.Read(persistedPath).Entries.ToDictionary(entry => entry.Id)
+            : new Dictionary<Guid, ClothingIdentityEntry>();
         var entries = new List<ClothingIdentityEntry>();
         var addressIds = new Dictionary<(string, string, int, string, int), Guid>();
         foreach (var item in project.Items)
@@ -52,6 +56,15 @@ public static class OriginalResourceExporter
             var textureIndexes = new Dictionary<int, Guid>();
             for (var position = 0; position < item.TexturePaths.Count; position++)
             {
+                if (string.IsNullOrWhiteSpace(item.TexturePaths[position]) && persisted.TryGetValue(item.Id, out var saved))
+                {
+                    var retired = saved.Textures.SingleOrDefault(texture => texture.Id == item.TextureIds[position]);
+                    if (retired is { Available: false, RedirectItemId: not null, RedirectTextureId: not null })
+                    {
+                        textures.Add(retired);
+                        continue;
+                    }
+                }
                 var name = Path.GetFileName(item.OriginalTextureFileNames.ElementAtOrDefault(position) ?? item.TexturePaths[position]);
                 var match = Regex.Match(name, @"\^(?:p_[a-z]+|[a-z]{4})_(?:diff_)?\d+(?:_([a-z]))?(?:_|\.|$)", RegexOptions.IgnoreCase);
                 if (!match.Success || string.IsNullOrWhiteSpace(item.TexturePaths[position]))
@@ -123,6 +136,7 @@ public static class OriginalResourceExporter
             }
             foreach (var asset in assets)
             {
+                if (string.IsNullOrWhiteSpace(asset.Path)) continue;
                 if (!checkedAssets.Add((asset.Path, asset.Name))) continue;
                 var projectAsset = resolve(asset.Path);
                 if (!File.Exists(projectAsset))

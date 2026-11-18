@@ -90,6 +90,9 @@ internal static class ReuseTests
         Check(full.Entries.Count == 2, "Full models need a new drawable.");
         var other = Map(Update(source, "different", Item("different", 1, 77)));
         Check(other.Entries.Count == 2, "Different 3D must not be reused.");
+        var separate = Item("separate", 1); separate.AllowModelReuse = false;
+        Check(Map(Update(source, "separate", separate)).Entries.Count == 2,
+            "An explicit separate drawable must not reuse an identical published model.");
         var female = Map(Update(source, "female", Item("female", 1, 7, "Feminino")));
         Check(female.Entries.Count == 2, "Models cannot be reused across genders.");
         var incompatible = Item("metadata", 1); incompatible.BehaviourFlags = 9;
