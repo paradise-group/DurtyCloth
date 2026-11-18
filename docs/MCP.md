@@ -54,7 +54,11 @@ metadados nativos: `_u` usa `_uni.ytd` e `_r` usa `_whi.ytd`. Um sufixo
 inconsistente no YTD de entrada é normalizado, tanto em drawables novos quanto
 nas texturas acrescentadas a um modelo idêntico. O conteúdo do YTD é preservado.
 `reuseExistingModels=false` em `prepare_clothing_update` força drawables separados
-somente para o pacote dessa chamada; o padrão continua `true`. Não altera nem
+somente para o pacote dessa chamada. Para impedir apenas alguns destinos, use
+`excludedReuseTargetIds` com os UUIDs desses drawables: a busca continua nos demais
+modelos compatíveis e nos drawables novos da mesma remessa, respeitando A–Z.
+Os parâmetros não mudam o comportamento das chamadas seguintes; o padrão de
+reaproveitamento continua `true`. A preparação não altera nem
 reorganiza roupas já publicadas. Uma migração explícita de texturas pode conservar
 os IDs antigos indisponíveis com `redirectItemId`/`redirectTextureId`, apontando
 diretamente para uma variante ativa do mesmo modelo de ped, tipo e slot. O adaptador

@@ -99,6 +99,12 @@ internal static class ReuseTests
         Check(Map(Update(source, "metadata", incompatible)).Entries.Count == 2, "Different runtime metadata needs its own drawable.");
         var spare = Item("spare", 15);
         var multiple = Baseline("multiple", originalItem, spare);
+        var excluded = Item("excluded-target", 2);
+        excluded.ExcludedReuseTargetIds.Add(originalItem.Id);
+        var excludedMap = Map(Update(multiple, "excluded-target", excluded));
+        Check(excludedMap.Entries.Single(entry => entry.Id == originalItem.Id).Textures.Count == 24
+            && excludedMap.Entries.Single(entry => entry.Id == spare.Id).Textures.Count == 17,
+            "Excluded targets must be skipped while other identical drawables can still be reused.");
         var multipleResult = Map(Update(multiple, "find-room", Item("batch", 10)));
         Check(multipleResult.Entries.Count == 2 && multipleResult.Entries.Single(entry => entry.Id == spare.Id).Textures.Count == 25,
             "Search another identical drawable when the first cannot fit the whole batch.");

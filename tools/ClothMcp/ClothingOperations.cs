@@ -177,15 +177,15 @@ public static class ClothingOperations
 
     public static async Task<object> PrepareUpdate(string resourceRoot, string packageRoot, string outputParent,
         string? gameFolder = null, CancellationToken cancellationToken = default, IProgress<string>? progress = null,
-        bool appendToLatestCollection = true, bool reuseExistingModels = true)
+        bool appendToLatestCollection = true, bool reuseExistingModels = true, IReadOnlyCollection<Guid>? excludedReuseTargetIds = null)
     {
         await BuildGate.WaitAsync(cancellationToken);
-        try { return await Task.Run(() => Build(resourceRoot, packageRoot, outputParent, gameFolder, appendToLatestCollection, reuseExistingModels, cancellationToken, progress), cancellationToken); }
+        try { return await Task.Run(() => Build(resourceRoot, packageRoot, outputParent, gameFolder, appendToLatestCollection, reuseExistingModels, excludedReuseTargetIds, cancellationToken, progress), cancellationToken); }
         finally { BuildGate.Release(); }
     }
 
     private static object Build(string resourceRoot, string packageRoot, string outputParent, string? gameFolder,
-        bool appendToLatestCollection, bool reuseExistingModels, CancellationToken cancellationToken, IProgress<string>? progress)
+        bool appendToLatestCollection, bool reuseExistingModels, IReadOnlyCollection<Guid>? excludedReuseTargetIds, CancellationToken cancellationToken, IProgress<string>? progress)
     {
         resourceRoot = Path.GetFullPath(resourceRoot);
         packageRoot = Path.GetFullPath(packageRoot);
@@ -199,6 +199,7 @@ public static class ClothingOperations
         foreach (var item in package.Items)
         {
             item.AllowModelReuse = reuseExistingModels;
+            item.ExcludedReuseTargetIds = excludedReuseTargetIds?.ToHashSet() ?? [];
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report("Validating package clothing: " + item.Name);
             ModelPreview.Read(item.ModelPath, false);

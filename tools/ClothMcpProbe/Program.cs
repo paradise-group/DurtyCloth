@@ -11,7 +11,7 @@ static void Check(bool condition, string message)
     if (!condition) throw new InvalidDataException(message);
 }
 
-if (args.Length is not (1 or 3 or 5)) throw new ArgumentException("Usage: ClothMcpProbe server.dll [--verify resourceRoot | --audit folder | --inspect extractedPackage | --prepare resourceRoot extractedPackage newOutputParent | --photos resourceRoot updateReport newOutputRoot]");
+if (args.Length is not (1 or 3 or 5 or 6)) throw new ArgumentException("Usage: ClothMcpProbe server.dll [--verify resourceRoot | --audit folder | --inspect extractedPackage | --prepare resourceRoot extractedPackage newOutputParent | --prepare-excluding resourceRoot extractedPackage newOutputParent excludedIdsJson | --photos resourceRoot updateReport newOutputRoot]");
 var hostPath = Path.GetFullPath(args[0]);
 var nativeHost = Path.GetExtension(hostPath).Equals(".exe", StringComparison.OrdinalIgnoreCase);
 await using var client = await McpClient.CreateAsync(new StdioClientTransport(new()
@@ -63,7 +63,7 @@ if (args.Length == 3)
     return;
 }
 
-if (args.Length == 5)
+if (args.Length is 5 or 6)
 {
     if (args[1] == "--photos")
     {
@@ -78,11 +78,12 @@ if (args.Length == 5)
         Console.WriteLine(Data(result).GetRawText());
         return;
     }
-    Check(args[1] is "--prepare" or "--prepare-separated", "Unknown action");
+    Check(args[1] is "--prepare" or "--prepare-separated" or "--prepare-excluding", "Unknown action");
     var package = Data(await Call("inspect_clothing_package", new() { ["packageRoot"] = args[3] }));
     Console.WriteLine($"Package: {package.GetProperty("models")} models, {package.GetProperty("textures")} YTDs; {package.GetProperty("errors").GetArrayLength()} blockers, {package.GetProperty("warnings").GetArrayLength()} warnings.");
     File.WriteAllText(Path.Combine(Path.GetDirectoryName(args[3])!, "mcp-package-inspection.json"), package.GetRawText());
-    var output = Data(await Call("prepare_clothing_update", new() { ["resourceRoot"] = args[2], ["packageRoot"] = args[3], ["outputParent"] = args[4], ["reuseExistingModels"] = args[1] != "--prepare-separated" }));
+    var output = Data(await Call("prepare_clothing_update", new() { ["resourceRoot"] = args[2], ["packageRoot"] = args[3], ["outputParent"] = args[4], ["reuseExistingModels"] = args[1] != "--prepare-separated",
+        ["excludedReuseTargetIds"] = args.Length == 6 ? JsonSerializer.Deserialize<Guid[]>(File.ReadAllText(args[5])) : null }));
     Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
     var validation = Data(await Call("validate_clothing_resource", new() { ["resourceRoot"] = output.GetProperty("output").GetString() }));
     Console.WriteLine($"Validated {validation.GetProperty("ymtsChecked")} YMTs, {validation.GetProperty("shopsChecked")} shops, {validation.GetProperty("identitiesChecked")} UUIDs. Issues: {validation.GetProperty("errors").GetArrayLength()}.");
