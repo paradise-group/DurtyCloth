@@ -6,6 +6,7 @@ e [docs/MCP.md](docs/MCP.md) antes de alterar esse fluxo.
 
 ## Atualizações de recursos
 
+- Nas novas importações, exclua peças confirmadas como vazias nas prévias (por exemplo, apenas pernas ou tornozelos sem roupa). Preferência do usuário: essas peças podem ser removidas, inclusive bases do pacote original. Em peças já publicadas, preserve os UUIDs e índices das demais roupas ao desativá-las.
 - Siga os invariantes de agrupamento, capacidade e preservação de identidades e
   o checklist antes de aplicar em [docs/MCP.md](docs/MCP.md#antes-de-aplicar-uma-atualização-preparada-ao-recurso-do-servidor).
 - O MCP acrescenta componentes no fim da última coleção `pcs` de cada gênero e só
