@@ -47,11 +47,11 @@ public static class ClothingTools
     }
 
     [McpServerTool(Name = "export_clothing_photos", Destructive = false, OpenWorld = false)]
-    [Description("Render every texture variant of selected local resource item UUIDs as 512px WebP previews using the studio renderer. Produces the nations3 CDN hierarchy, UUID filenames and a SHA-256 manifest in a NEW outputRoot outside the resource. Masks/hair need an installed GTA V. Does not publish images or modify server manifests.")]
+    [Description("Render one 512px WebP thumbnail per selected item using its first available texture. Set firstTextureOnly=false to render all available variants. Unavailable or migrated variants are skipped; native indices and UUIDs are preserved. Produces nations3 UUID paths and a SHA-256 manifest in a NEW outputRoot outside the resource. Masks/hair need installed GTA V. Does not publish images or modify server manifests.")]
     public static async Task<string> ExportPhotos(string resourceRoot, Guid[] itemIds, string outputRoot,
-        IProgress<ProgressNotificationValue> progress, string? gameFolder = null, CancellationToken cancellationToken = default)
+        IProgress<ProgressNotificationValue> progress, string? gameFolder = null, bool firstTextureOnly = true, CancellationToken cancellationToken = default)
     {
-        try { return Json(await ClothingPhotoExporter.ExportAsync(resourceRoot, itemIds, outputRoot, gameFolder, new McpProgress(progress), cancellationToken)); }
+        try { return Json(await ClothingPhotoExporter.ExportAsync(resourceRoot, itemIds, outputRoot, gameFolder, new McpProgress(progress), cancellationToken, firstTextureOnly)); }
         catch (Exception error) when (error is not OperationCanceledException) { throw new McpException(error.Message, error); }
     }
 

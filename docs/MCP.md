@@ -36,7 +36,7 @@ Evite `dotnet run` na configuração stdio, pois mensagens de compilação usam 
 | `inspect_clothing_resource` | `resourceRoot`, `search`, `offset`, `limit` | Contagens e página de peças com collection, slot, índice e UUID |
 | `validate_clothing_resource` | `resourceRoot` | Diagnósticos estáticos de metadados e mapa de UUID |
 | `prepare_clothing_update` | `resourceRoot`, `packageRoot`, `outputParent`, `gameFolder` e `appendToLatestCollection` opcionais | Cópia atualizada, projeto e relatório das adições |
-| `export_clothing_photos` | `resourceRoot`, `itemIds`, `outputRoot`, `gameFolder` opcional | WebP 512 px por variante, com caminhos UUID para nations3 e manifesto SHA-256 |
+| `export_clothing_photos` | `resourceRoot`, `itemIds`, `outputRoot`, `gameFolder` e `firstTextureOnly` opcionais | WebP 512 px da primeira textura por peça; todas as disponíveis com `firstTextureOnly=false`; caminhos UUID e manifesto SHA-256 |
 
 Extraia `.rar`/`.zip` antes de passar a pasta. O MCP não executa arquivos do pacote.
 Ele reconhece os nomes GTA e pastas `male`/`female`, `Masculino`/`Feminino` e `M`/`F`.
@@ -170,8 +170,12 @@ cadastrar combinações/permissões no vestiário da polícia são operações s
 Use `additions` no relatório para obter os endereços corretos; não estime índices
 globais do servidor. Faça o teste no jogo antes de publicar.
 
-`export_clothing_photos` recebe uma lista explícita de UUIDs e fotografa todas as
-variantes dessas peças usando o renderizador do Studio em uma thread STA. A pasta
+`export_clothing_photos` recebe uma lista explícita de UUIDs e fotografa, por padrão,
+apenas a primeira textura disponível de cada peça, em ordem de índice nativo.
+`firstTextureOnly=false` permite fotografar todas as variantes disponíveis.
+A renderização usa o Studio em uma thread STA.
+Posições indisponíveis ou migradas não são fotografadas; os índices e UUIDs das
+variantes ativas permanecem iguais, sem compactar a numeração. A pasta
 de saída deve ser nova e ficar fora do recurso. Chapéus, máscaras, cabelos e acessórios
 faciais usam o ped da instalação GTA V configurada. As imagens usam WebP de 512 px,
 qualidade 85 e o mesmo fundo cinza da exportação pela interface. O manifesto

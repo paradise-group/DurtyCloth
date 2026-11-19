@@ -12,12 +12,13 @@ public sealed record ClothingPhotoExportResult(string OutputRoot, string Manifes
 public static class ClothingPhotoExporter
 {
     public static Task<ClothingPhotoExportResult> ExportAsync(string resourceRoot, Guid[] itemIds, string outputRoot,
-        string? gameFolder = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+        string? gameFolder = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default,
+        bool firstTextureOnly = true)
     {
         var completion = new TaskCompletionSource<ClothingPhotoExportResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
-            try { completion.SetResult(Export(resourceRoot, itemIds, outputRoot, gameFolder, progress, cancellationToken)); }
+            try { completion.SetResult(Export(resourceRoot, itemIds, outputRoot, gameFolder, progress, cancellationToken, firstTextureOnly)); }
             catch (OperationCanceledException) { completion.SetCanceled(cancellationToken); }
             catch (Exception error) { completion.SetException(error); }
         }) { IsBackground = true, Name = "Clothing photo export" };
@@ -27,7 +28,7 @@ public static class ClothingPhotoExporter
     }
 
     private static ClothingPhotoExportResult Export(string resourceRoot, Guid[] itemIds, string outputRoot,
-        string? gameFolder, IProgress<string>? progress, CancellationToken cancellationToken)
+        string? gameFolder, IProgress<string>? progress, CancellationToken cancellationToken, bool firstTextureOnly)
     {
         resourceRoot = FiveMResource.Open(resourceRoot).Root;
         outputRoot = Path.GetFullPath(outputRoot);
@@ -44,7 +45,9 @@ public static class ClothingPhotoExporter
         var entries = map.Entries.Where(entry => selected.Contains(entry.Id)).ToArray();
         if (entries.Length != selected.Count || entries.Any(entry => !entry.Available || entry.ModelFile is null))
             throw new InvalidDataException("Every selected UUID must identify an available model in the resource.");
-        if (entries.Any(entry => entry.Textures.Count == 0 || entry.Textures.Any(texture => !texture.Available || texture.File is null)))
+        entries = entries.Select(entry => entry with { Textures = entry.Textures.Where(texture => texture.Available)
+            .OrderBy(texture => texture.Index).Take(firstTextureOnly ? 1 : int.MaxValue).ToList() }).ToArray();
+        if (entries.Any(entry => entry.Textures.Count == 0 || entry.Textures.Any(texture => texture.File is null)))
             throw new InvalidDataException("Photo export requires explicit available YTD files for every selected variant.");
         var files = Directory.EnumerateFiles(Path.Combine(resourceRoot, "stream"), "*", SearchOption.AllDirectories)
             .GroupBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key!, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
